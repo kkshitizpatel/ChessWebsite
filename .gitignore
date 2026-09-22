@@ -1,0 +1,17 @@
+# Ignore large data files and databases
+/data/*.db
+/data/*.sqlite
+/data/*.db-journal
+
+# Ignore large downloaded files
+/client/*.tgz
+/client/*.zip
+/client/*.tar.gz
+
+# Ignore Next.js build cache (in case client/.gitignore isn't catching it properly)
+/client/.next/
+
+# Standard ignores just in case
+node_modules/
+.env
+.env.local

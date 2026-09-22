@@ -1,0 +1,36 @@
+Created At: 2026-09-20T18:29:52+05:30
+Tool is running as a background task with task id: 6cfe1a9d-79b6-47c3-987c-cd9bf8fced94/task-2672
+Task Description: node -e "
+const fs = require('fs');
+const logPath = 'C:/Users/kkshi/.gemini/antigravity/brain/6cfe1a9d-79b6-47c3-987c-cd9bf8fced94/.system_generated/logs/transcript_full.jsonl';
+if (!fs.existsSync(logPath)) { console.log('Log not found'); process.exit(1); }
+
+const lines = fs.readFileSync(logPath, 'utf8').split('\n');
+let bestMatch = '';
+let maxLength = 0;
+
+for (let i = 0; i < lines.length; i++) {
+  const line = lines[i];
+  if (!line) continue;
+  try {
+    const obj = JSON.parse(line);
+    const content = obj.content || (obj.tool_calls ? JSON.stringify(obj.tool_calls) : '');
+    
+    // Check if this content contains the specific missing code
+    if (content.includes('COLUMN 1: Chessboard') && content.includes('Evaluation Gauge') && content.includes('Start Analysis')) {
+      if (content.length > maxLength) {
+        maxLength = content.length;
+        bestMatch = content;
+      }
+    }
+  } catch (e) {}
+}
+
+if (bestMatch) {
+  fs.writeFileSync('recovered_ui.txt', bestMatch, 'utf8');
+  console.log('Successfully recovered UI! Length: ' + bestMatch.length);
+} else {
+  console.log('Could not find the UI code in the logs.');
+}
+"
+Task logs are available at: file:///C:/Users/kkshi/.gemini/antigravity/brain/6cfe1a9d-79b6-47c3-987c-cd9bf8fced94/.system_generated/tasks/task-2672.log
