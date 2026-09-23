@@ -11,8 +11,8 @@ interface MoveListProps {
   usePieceIcons?: boolean;
 }
 
-const pieceIconMapWhite: Record<string, string> = { N: '?', B: '?', R: '?', Q: '?', K: '?' };
-const pieceIconMapBlack: Record<string, string> = { N: '?', B: '?', R: '?', Q: '?', K: '?' };
+const pieceIconMapWhite: Record<string, string> = { N: '♘', B: '♗', R: '♖', Q: '♕', K: '♔' };
+const pieceIconMapBlack: Record<string, string> = { N: '♞', B: '♝', R: '♜', Q: '♛', K: '♚' };
 
 const formatSan = (san: string, color: 'w'|'b', useIcons: boolean) => {
   if (!useIcons || !san) return san;

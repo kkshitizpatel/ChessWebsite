@@ -14,7 +14,7 @@ import { MoveList } from "./MoveList";
 import { BOARD_THEMES } from "./VisualSettingsModal";
 
 const ChessDashboard = forwardRef(function ChessDashboard(
-  { boardTheme = "green", pieceStyle = "cburnett", usePieceIcons = false }: { boardTheme?: string, pieceStyle?: string, usePieceIcons?: boolean },
+  { boardTheme = "green", pieceStyle = "cburnett", usePieceIcons = false, onTogglePieceIcons }: { boardTheme?: string, pieceStyle?: string, usePieceIcons?: boolean, onTogglePieceIcons?: () => void },
   ref: React.Ref<{ loadPgnExternal: (pgn: string) => void }>
 ) {
 
@@ -55,6 +55,17 @@ const ChessDashboard = forwardRef(function ChessDashboard(
 
   useEffect(() => { moveTreeRef.current = moveTree; }, [moveTree]);
   useEffect(() => { currentNodeIdRef.current = currentNodeId; }, [currentNodeId]);
+
+  const customPieces = React.useMemo(() => {
+    const pieceIds = ['wP', 'wN', 'wB', 'wR', 'wQ', 'wK', 'bP', 'bN', 'bB', 'bR', 'bQ', 'bK'];
+    const custom: any = {};
+    pieceIds.forEach(p => {
+      custom[p] = (props: any) => (
+        <img style={{ width: '100%', height: '100%' }} src={`/pieces/${pieceStyle}/${p}.svg`} alt={p} />
+      );
+    });
+    return custom;
+  }, [pieceStyle]);
 
   // ResizeObserver - perfectly fit board to available space
   useEffect(() => {
@@ -330,12 +341,17 @@ const ChessDashboard = forwardRef(function ChessDashboard(
         <div ref={boardContainerRef} className="flex-1 min-h-0 flex items-center justify-center relative">
           <div style={{ width: boardWidth, height: boardWidth, position: 'relative', flexShrink: 0 }}>
             <Chessboard
-              {...({ position: fen, boardWidth } as any)}
-              onPieceDrop={onPieceDrop}
-              boardOrientation={boardOrientation}
-              customBoardStyle={{
-                borderRadius: '4px',
-                boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+              options={{
+                position: fen,
+                onPieceDrop: onPieceDrop,
+                boardOrientation: boardOrientation,
+                darkSquareStyle: { backgroundColor: BOARD_THEMES[boardTheme]?.dark || '#779556' },
+                lightSquareStyle: { backgroundColor: BOARD_THEMES[boardTheme]?.light || '#ebecd0' },
+                pieces: customPieces,
+                boardStyle: {
+                  borderRadius: '4px',
+                  boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+                }
               }}
             />
             {/* Eval Bar */}
@@ -437,7 +453,18 @@ const ChessDashboard = forwardRef(function ChessDashboard(
       {/* ===== COLUMN 2: MOVE LIST ===== */}
       <div className="hidden lg:flex w-[300px] xl:w-[330px] flex-col border-x border-surface-border bg-surface shrink-0">
         <div className="bg-surface-elevated text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2 border-b border-surface-border shrink-0 flex justify-between items-center">
-          <span>Move List</span>
+          <div className="flex items-center gap-3">
+            <span>Move List</span>
+            {onTogglePieceIcons && (
+              <button 
+                onClick={onTogglePieceIcons}
+                title="Toggle Piece Icons"
+                className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-colors ${usePieceIcons ? 'bg-chess-green/20 text-chess-green border-chess-green/30' : 'bg-surface border-surface-border text-gray-500 hover:text-gray-300'}`}
+              >
+                <span className="text-[14px] leading-none mb-[2px]">♞</span>
+              </button>
+            )}
+          </div>
           <button onClick={() => goToMove(null)} className="hover:text-white"><SkipBack size={14}/></button>
         </div>
         <div ref={moveListRef} className="flex-1 overflow-y-auto">

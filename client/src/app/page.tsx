@@ -122,8 +122,13 @@ export default function Home() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-[1366px] mx-auto overflow-hidden">
-        <ChessDashboard ref={dashboardRef} boardTheme={boardTheme} pieceStyle={pieceStyle}
-                usePieceIcons={usePieceIcons} />
+        <ChessDashboard 
+          ref={dashboardRef} 
+          boardTheme={boardTheme} 
+          pieceStyle={pieceStyle}
+          usePieceIcons={usePieceIcons} 
+          onTogglePieceIcons={() => handleSetUsePieceIcons(!usePieceIcons)}
+        />
       </main>
 
       {/* Historical Games Modal */}

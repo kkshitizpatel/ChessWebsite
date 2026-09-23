@@ -136,41 +136,30 @@ export function VisualSettingsModal({
             <section aria-label="Piece Style">
               <div className="flex items-center justify-between mb-2">
                 <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Piece Style</label>
-                <span className="text-[11px] text-chess-muted">Classic SVG Vectors</span>
+                <span className="text-[11px] text-chess-muted">5 options</span>
               </div>
-              <div className="space-y-1.5" role="radiogroup">
+              <div className="grid grid-cols-5 gap-2" role="radiogroup">
                 {pieces.map(p => {
                   const isSelected = pieceStyle === p.id;
                   return (
-                    <div
+                    <button
                       key={p.id}
                       onClick={() => setPieceStyle(p.id)}
                       aria-checked={isSelected}
-                      className={`flex items-center justify-between px-3.5 py-2.5 rounded-xl cursor-pointer transition ${isSelected ? 'bg-[#262f20] border-2 border-chess-green/90 shadow-sm' : 'bg-chess-card/50 border border-chess-border hover:bg-chess-card hover:border-neutral-500'}`}
+                      className={`group relative flex flex-col items-center p-1.5 rounded-xl transition hover:scale-[1.02] ${isSelected ? 'bg-chess-card border-2 border-chess-green shadow-[0_0_12px_rgba(129,182,76,0.25)]' : 'bg-chess-card/70 border border-chess-border hover:border-neutral-500 hover:bg-chess-card'}`}
                       role="radio"
-                      tabIndex={0}
+                      type="button"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`flex items-center gap-1.5 px-2 py-1 rounded-md border border-white/5 ${isSelected ? 'bg-black/40' : 'bg-black/30 opacity-85'}`}>
-                          {p.svg1}
-                          {p.svg2}
-                        </div>
-                        <div>
-                          <span className={`text-sm flex items-center gap-2 ${isSelected ? 'font-semibold text-white' : 'font-medium text-neutral-200'}`}>
-                            {p.label}
-                            {p.defaultTag && <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-chess-green/20 text-chess-green border border-chess-green/30">Default</span>}
-                          </span>
-                          <p className={`text-[11px] ${isSelected ? 'text-chess-muted' : 'text-neutral-500'}`}>{p.desc}</p>
-                        </div>
+                      <div className={`w-full aspect-square rounded-md overflow-hidden flex items-center justify-center border border-white/5 ${isSelected ? 'bg-black/40' : 'bg-black/30'}`}>
+                        {p.svg1}
                       </div>
-                      {isSelected ? (
-                        <div className="text-chess-green">
-                          <svg className="w-5 h-5 stroke-current stroke-2 fill-none" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                      <span className={`mt-1.5 text-[11px] ${isSelected ? 'font-semibold text-white' : 'text-neutral-300 font-medium'}`}>{p.label}</span>
+                      {isSelected && (
+                        <div className="absolute -top-1.5 -right-1.5 bg-chess-green text-black rounded-full p-0.5 shadow">
+                          <svg className="w-3 h-3 stroke-black stroke-[3] fill-none" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
                         </div>
-                      ) : (
-                        <span className="w-4 h-4 rounded-full border border-neutral-600"></span>
                       )}
-                    </div>
+                    </button>
                   );
                 })}
               </div>
