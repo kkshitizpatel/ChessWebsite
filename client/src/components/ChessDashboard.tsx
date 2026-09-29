@@ -9,7 +9,7 @@ import {
   SkipBack, ArrowLeft, ArrowRight, SkipForward, User
 } from "lucide-react";
 import { Engine } from "../lib/engine";
-import { MoveTree, createEmptyTree, parsePgnToTree, addMoveToTree } from "../lib/moveTree";
+import { MoveTree, createEmptyTree, parsePgnToTree, addMoveToTree, exportTreeToPgn } from "../lib/moveTree";
 import { MoveList } from "./MoveList";
 import { BOARD_THEMES } from "./VisualSettingsModal";
 
@@ -265,9 +265,28 @@ const ChessDashboard = forwardRef(function ChessDashboard(
   const [isPracticing, setIsPracticing] = useState(false);
   const [isAnalyzingLocal, setIsAnalyzingLocal] = useState(false);
 
+  
+  useEffect(() => {
+    if (!isPracticing || !engineRef.current || gameStatus !== "active") return;
+    const currentTurn = chessRef.current.turn() === 'w' ? 'white' : 'black';
+    if (currentTurn !== boardOrientation) {
+      const timer = setTimeout(async () => {
+        const evalResult = await engineRef.current.evaluateFen(fen, computerLevel * 2); 
+        const bestMove = evalResult.pv?.split(' ')[0];
+        if (bestMove) {
+          const from = bestMove.slice(0, 2);
+          const to = bestMove.slice(2, 4);
+          const promotion = bestMove.length > 4 ? bestMove[4] : undefined;
+          makeAMove({ from, to, promotion });
+        }
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [fen, isPracticing, boardOrientation, gameStatus, computerLevel, makeAMove]);
+
   const handleStartAnalysis = async () => {
     setIsAnalyzingLocal(true);
-    setAiResponse("Evaluating position with Stockfish 16.1...");
+    setAiResponse("Evaluating position with Stockfish 18...");
     
     try {
       // 1. First get Stockfish evaluation
@@ -287,7 +306,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          pgn: chessRef.current.pgn(),
+          pgn: exportTreeToPgn(moveTreeRef.current, { white: whitePlayer.name, black: blackPlayer.name, date: new Date().toISOString().split("T")[0] }),
           selectedMoves: moveSubset,
           language: explanationLanguage,
           model: aiModel,
@@ -309,7 +328,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
   };
 
   // Chess piece unicode icons for captured pieces display
-  const capIconMap: Record<string, string> = { 'p': '♙', 'n': '♘', 'b': '♗', 'r': '♖', 'q': '♕' };
+  const capIconMap: Record<string, string> = { 'p': '♟', 'n': '♞', 'b': '♝', 'r': '♜', 'q': '♛' };
 
   return (
     <div className="flex h-full bg-[#111111] text-gray-200 overflow-hidden font-sans">
@@ -427,6 +446,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                       <input type="checkbox" checked={showBestMoveArrow} onChange={e => setShowBestMoveArrow(e.target.checked)} className="accent-primary w-4 h-4" />
                       <span className="text-sm font-semibold">Show best move arrow</span>
                     </label>
+                      
                   </div>
                   <div className="py-1">
                     <button onClick={() => { setBoardOrientation(o => o === "white" ? "black" : "white"); setShowSettings(false); }} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 text-sm w-full text-left transition">
@@ -455,15 +475,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
         <div className="bg-surface-elevated text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2 border-b border-surface-border shrink-0 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <span>Move List</span>
-            {onTogglePieceIcons && (
-              <button 
-                onClick={onTogglePieceIcons}
-                title="Toggle Piece Icons"
-                className={`flex items-center gap-1.5 px-2 py-0.5 rounded border transition-colors ${usePieceIcons ? 'bg-chess-green/20 text-chess-green border-chess-green/30' : 'bg-surface border-surface-border text-gray-500 hover:text-gray-300'}`}
-              >
-                <span className="text-[14px] leading-none mb-[2px]">♞</span>
-              </button>
-            )}
+            
           </div>
           <button onClick={() => goToMove(null)} className="hover:text-white"><SkipBack size={14}/></button>
         </div>

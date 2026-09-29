@@ -164,6 +164,16 @@ export function VisualSettingsModal({
                 })}
               </div>
             </section>
+
+            <section aria-label="Move Notation" className="pt-2 border-t border-chess-border/30">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-neutral-400">Move Notation</label>
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer p-2.5 bg-chess-card/70 border border-chess-border rounded-xl hover:bg-chess-card hover:border-neutral-500 transition w-full">
+                <input type="checkbox" checked={usePieceIcons} onChange={e => setUsePieceIcons(e.target.checked)} className="accent-chess-green w-4 h-4" />
+                <span className="text-[12px] font-medium text-neutral-300">Use Piece Icons in Move List (e.g. ♞f3 instead of Nf3)</span>
+              </label>
+            </section>
           </div>
 
           <footer className="px-5 py-3.5 bg-[#171615] border-t border-chess-border/80 flex flex-col gap-3 shrink-0">

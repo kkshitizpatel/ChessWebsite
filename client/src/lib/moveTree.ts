@@ -176,3 +176,51 @@ export function addMoveToTree(
     newNodeId: nodeId,
   };
 }
+
+export function exportTreeToPgn(tree: MoveTree, headers: Record<string, string> = {}): string {
+  let pgn = "";
+  for (const [key, val] of Object.entries(headers)) {
+    pgn += `[${key} "${val}"]\n`;
+  }
+  if (Object.keys(headers).length > 0) pgn += "\n";
+
+  function traverse(nodeId: string, isMainLine: boolean = true): string {
+    const node = tree.nodes[nodeId];
+    if (!node) return "";
+    
+    let res = "";
+    if (node.turn === 'w') {
+      res += `${node.moveNumber}. ${node.san} `;
+    } else {
+      if (isMainLine && tree.nodes[node.parentId || ""]?.turn !== 'w') {
+        res += `${node.moveNumber}... ${node.san} `;
+      } else {
+        res += `${node.san} `;
+      }
+    }
+
+    if (node.childrenIds.length > 0) {
+      const mainChild = node.childrenIds[0];
+      res += traverse(mainChild, true);
+      
+      for (let i = 1; i < node.childrenIds.length; i++) {
+        const varChild = node.childrenIds[i];
+        const varNode = tree.nodes[varChild];
+        let varStr = "";
+        if (varNode.turn === 'w') {
+           varStr = traverse(varChild, false);
+        } else {
+           varStr = `${varNode.moveNumber}... ${traverse(varChild, false)}`;
+        }
+        res += `(${varStr.trim()}) `;
+      }
+    }
+    return res;
+  }
+
+  for (const rootId of tree.rootIds) {
+    pgn += traverse(rootId, true);
+  }
+  
+  return pgn.trim();
+}
