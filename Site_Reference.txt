@@ -86,17 +86,17 @@ Use these tags in your prompt to easily control the changes:
 | 3.5.3 | Practice with Computer (Target Icon) | ✅ Working | Button toggles practice mode against engine |
 | 3.5.4 | Start Analysis Button (Green Button) | ✅ Working | Sends selected moves to AI API |
 | 3.5.5 | Chessboard Settings (Slider Icon) | ✅ Working | Toggles settings popup |
-| 3.5.5 (Redesign) | 3.5.5 Popup Redesign | ✅ Working | Board Editor + Settings unified popup UI complete |
+| 3.5.5 (Redesign) | 3.5.5 Popup Redesign | ✅ Working | Board Editor + Settings unified popup (width 450px, airy padding, height within 768px bounds) |
 | 3.5.5.1 | Computer level (Slider + Badge, default 6) | ✅ Working | Updates Engine Skill (1-10) (engine = stockfish-19-lite-single) |
 | 3.5.5.2 | Show best move (Toggle icon) | ✅ Working | Engine top move display toggle |
-| 3.5.5.3 | Black pieces palette | ⬜ UI Only | cburnett SVG palette + Pointer Events skeleton ready; Board Editor logic pending |
-| 3.5.5.4 | White pieces palette | ⬜ UI Only | cburnett SVG palette + Pointer Events skeleton ready; Board Editor logic pending |
-| 3.5.5.5 | Turn to play (Dropdown) | ⬜ UI Only | Dropdown UI ready; FEN turn binding pending |
-| 3.5.5.6 | Castling rights (Checkboxes) | ⬜ UI Only | White/Black 0-0 & 0-0-0 checkboxes UI ready; legality binding pending |
-| 3.5.5.7 | En passant rights (Dropdown) | ⬜ UI Only | '-' and a-h dropdown UI ready; legal file binding pending |
-| 3.5.5.8 | Time control (Toggle icon + presets) | ⬜ UI Only | Toggle & 3x3 preset grid UI ready (10 min default); clock logic pending |
-| 3.5.5.9 | Starting position | ✅ Working | Resets board to standard starting position |
-| 3.5.5.10 | Clear board | ✅ Working | Empties board |
+| 3.5.5.3 | Black pieces palette | ✅ Working | 42x44px dark-contrast (`#1e2327`) frame, 30px cburnett SVGs, Pointer Events click/drag/trash |
+| 3.5.5.4 | White pieces palette | ✅ Working | 42x44px frame, 30px cburnett SVGs, Pointer Events click/drag/trash |
+| 3.5.5.5 | Turn to play (Dropdown) | ✅ Working | Live FEN active turn sync with FIDE inactive-king check block |
+| 3.5.5.6 | Castling rights (Checkboxes) | ✅ Working | Dynamic home-square verification (`e1/h1/a1` & `e8/h8/a8`) + live FEN sync |
+| 3.5.5.7 | En passant rights (Dropdown) | ✅ Working | Dynamic legal capture file (`a-h` or `-`) calculation + live FEN sync |
+| 3.5.5.8 | Time control (Toggle icon + presets) | ⬜ UI Only | Toggle & 3x3 preset grid UI ready (40px height, 8px gaps, 10 min default); clock logic pending |
+| 3.5.5.9 | Starting position | ✅ Working | Resets board to standard starting position, all 4 castling rights ON, clears move history |
+| 3.5.5.10 | Clear board | ✅ Working | Empties board (`8/8/8/8/8/8/8/8 w - - 0 1`), locks Start Analysis & Practice until both Kings placed |
 
 ---
 

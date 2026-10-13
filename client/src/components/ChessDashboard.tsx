@@ -12,6 +12,23 @@ import { Engine } from "../lib/engine";
 import { MoveTree, createEmptyTree, parsePgnToTree, addMoveToTree, exportTreeToPgn } from "../lib/moveTree";
 import { MoveList } from "./MoveList";
 import { BOARD_THEMES } from "./VisualSettingsModal";
+import {
+  BoardMap,
+  CastlingFlags,
+  PieceCode,
+  PieceColor,
+  STANDARD_INITIAL_FEN,
+  EMPTY_BOARD_FEN,
+  parseFenToEditorState,
+  computeEligibleCastlingRights,
+  sanitizeCastlingFlags,
+  computeLegalEnPassantFiles,
+  buildFenFromEditorState,
+  validateEditorAction,
+  canSwitchTurn,
+  validateBoardPosition,
+  coordsToSquare,
+} from "../lib/chessLegalityValidator";
 
 const ChessDashboard = forwardRef(function ChessDashboard(
   { boardTheme = "green", pieceStyle = "cburnett", usePieceIcons = false, onTogglePieceIcons }: { boardTheme?: string, pieceStyle?: string, usePieceIcons?: boolean, onTogglePieceIcons?: () => void },
@@ -185,20 +202,159 @@ const ChessDashboard = forwardRef(function ChessDashboard(
     finally { setIsImporting(false); }
   };
 
+  const boardSquareWrapperRef = useRef<HTMLDivElement>(null);
+  const syncingFromEditorRef = useRef(false);
+  const [editorBoard, setEditorBoard] = useState<BoardMap>(
+    () => parseFenToEditorState(STANDARD_INITIAL_FEN).board
+  );
+  const [editorTurn, setEditorTurn] = useState<PieceColor>("w");
+  const [editorCastling, setEditorCastling] = useState<CastlingFlags>({
+    wK: true,
+    wQ: true,
+    bK: true,
+    bQ: true,
+  });
+  const [editorEnPassant, setEditorEnPassant] = useState<string>("-");
+  const [editorFeedback, setEditorFeedback] = useState<string | null>(null);
+  const [activeEditorTool, setActiveEditorTool] = useState<string>("w-hand");
+  const [timeControlEnabled, setTimeControlEnabled] = useState<boolean>(false);
+  const [selectedTimePreset, setSelectedTimePreset] = useState<string>("10 min");
+
+  const [pointerDrag, setPointerDrag] = useState<{
+    source: "palette" | "board";
+    sourceSquare: string | null;
+    piece: PieceCode;
+    startX: number;
+    startY: number;
+    clientX: number;
+    clientY: number;
+    hasMoved: boolean;
+  } | null>(null);
+
+  // Sync editor state when FEN changes from gameplay, move navigation, or PGN import
+  useEffect(() => {
+    if (syncingFromEditorRef.current) {
+      syncingFromEditorRef.current = false;
+      return;
+    }
+    const parsed = parseFenToEditorState(fen);
+    setEditorBoard(parsed.board);
+    setEditorTurn(parsed.turn);
+    setEditorCastling(parsed.castling);
+    setEditorEnPassant(parsed.epFile);
+  }, [fen]);
+
+  // Auto-clear transient action feedback after 3.5 seconds
+  useEffect(() => {
+    if (!editorFeedback) return;
+    const t = setTimeout(() => setEditorFeedback(null), 3500);
+    return () => clearTimeout(t);
+  }, [editorFeedback]);
+
+  const positionValidation = React.useMemo(
+    () => validateBoardPosition(editorBoard, editorTurn),
+    [editorBoard, editorTurn]
+  );
+  const eligibleCastling = positionValidation.eligibleCastling;
+  const legalEpFiles = positionValidation.legalEpFiles;
+
+  const [isPracticing, setIsPracticing] = useState(false);
+  const [isAnalyzingLocal, setIsAnalyzingLocal] = useState(false);
+
+  const applyEditorState = useCallback(
+    (
+      nextBoard: BoardMap,
+      nextTurn: PieceColor,
+      nextCastling?: CastlingFlags,
+      nextEpFile?: string
+    ) => {
+      const nextEligible = computeEligibleCastlingRights(nextBoard);
+      const sanitizedCastling = sanitizeCastlingFlags(
+        nextCastling ?? editorCastling,
+        nextEligible
+      );
+      const nextLegalEp = computeLegalEnPassantFiles(nextBoard, nextTurn);
+      const candidateEp = nextEpFile ?? editorEnPassant;
+      const sanitizedEp =
+        candidateEp !== "-" && nextLegalEp.includes(candidateEp)
+          ? candidateEp
+          : "-";
+
+      const nextFen = buildFenFromEditorState(
+        nextBoard,
+        nextTurn,
+        sanitizedCastling,
+        sanitizedEp
+      );
+
+      syncingFromEditorRef.current = true;
+      setEditorBoard(nextBoard);
+      setEditorTurn(nextTurn);
+      setEditorCastling(sanitizedCastling);
+      setEditorEnPassant(sanitizedEp);
+      setEditorFeedback(null);
+      setFen(nextFen);
+
+      // Reset Move List to fresh custom position setup
+      setMoveTree(createEmptyTree());
+      setCurrentNodeId(null);
+      setSelectedMoves(new Set());
+
+      const posCheck = validateBoardPosition(nextBoard, nextTurn);
+      if (posCheck.isValid) {
+        try {
+          chessRef.current.load(nextFen);
+          if (chessRef.current.isCheckmate()) setGameStatus("checkmate");
+          else if (chessRef.current.isStalemate()) setGameStatus("stalemate");
+          else if (chessRef.current.isDraw()) setGameStatus("draw");
+          else setGameStatus("active");
+        } catch {
+          setGameStatus("active");
+        }
+      } else {
+        setIsPracticing(false);
+        setGameStatus("invalid");
+      }
+    },
+    [editorCastling, editorEnPassant]
+  );
+
   const clearBoard = useCallback(() => {
-    chessRef.current.clear(); setFen(chessRef.current.fen());
-    setMoveTree(createEmptyTree()); setCurrentNodeId(null); setGameStatus("active");
+    chessRef.current.clear();
+    syncingFromEditorRef.current = true;
+    setEditorBoard({});
+    setEditorTurn("w");
+    setEditorCastling({ wK: false, wQ: false, bK: false, bQ: false });
+    setEditorEnPassant("-");
+    setEditorFeedback(null);
+    setFen(EMPTY_BOARD_FEN);
+    setMoveTree(createEmptyTree());
+    setCurrentNodeId(null);
+    setSelectedMoves(new Set());
+    setIsPracticing(false);
+    setGameStatus("invalid");
     setWhitePlayer({ name: "White Player", rating: "1500" });
     setBlackPlayer({ name: "Black Player", rating: "1500" });
-    setAiResponse(""); setShowSettings(false);
+    setAiResponse("");
   }, []);
 
   const resetBoard = useCallback(() => {
-    chessRef.current.reset(); setFen(chessRef.current.fen());
-    setMoveTree(createEmptyTree()); setCurrentNodeId(null); setGameStatus("active");
+    chessRef.current.reset();
+    const initial = parseFenToEditorState(STANDARD_INITIAL_FEN);
+    syncingFromEditorRef.current = true;
+    setEditorBoard(initial.board);
+    setEditorTurn("w");
+    setEditorCastling({ wK: true, wQ: true, bK: true, bQ: true });
+    setEditorEnPassant("-");
+    setEditorFeedback(null);
+    setFen(STANDARD_INITIAL_FEN);
+    setMoveTree(createEmptyTree());
+    setCurrentNodeId(null);
+    setSelectedMoves(new Set());
+    setGameStatus("active");
     setWhitePlayer({ name: "White Player", rating: "1500" });
     setBlackPlayer({ name: "Black Player", rating: "1500" });
-    setAiResponse(""); setShowSettings(false);
+    setAiResponse("");
   }, []);
 
   const makeAMove = useCallback((move: { from: string; to: string; promotion?: string }) => {
@@ -225,8 +381,9 @@ const ChessDashboard = forwardRef(function ChessDashboard(
   }, []);
 
   const onPieceDrop = useCallback(({ sourceSquare, targetSquare }: any) => {
+    if (!positionValidation.isValid) return false;
     return makeAMove({ from: sourceSquare, to: targetSquare, promotion: "q" }) !== null;
-  }, [makeAMove]);
+  }, [makeAMove, positionValidation.isValid]);
 
   const toggleMoveSelection = useCallback((nodeId: string) => {
     setSelectedMoves(prev => {
@@ -262,27 +419,276 @@ const ChessDashboard = forwardRef(function ChessDashboard(
     if (last !== currentNodeId) goToMove(last);
   }, [currentNodeId, moveTree, goToMove]);
 
-  const [isPracticing, setIsPracticing] = useState(false);
-  const [isAnalyzingLocal, setIsAnalyzingLocal] = useState(false);
+  const getSquareFromClientCoords = useCallback(
+    (
+      clientX: number,
+      clientY: number
+    ): { square: string | null; insideBoard: boolean } => {
+      const rect = boardSquareWrapperRef.current?.getBoundingClientRect();
+      if (!rect || rect.width <= 0 || rect.height <= 0) {
+        return { square: null, insideBoard: false };
+      }
+      const insideBoard =
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom;
+      if (!insideBoard) {
+        return { square: null, insideBoard: false };
+      }
+      const col = Math.min(
+        7,
+        Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * 8))
+      );
+      const row = Math.min(
+        7,
+        Math.max(0, Math.floor(((clientY - rect.top) / rect.height) * 8))
+      );
+      const fileIdx = boardOrientation === "white" ? col : 7 - col;
+      const rankIdx = boardOrientation === "white" ? 7 - row : row;
+      return { square: coordsToSquare(fileIdx, rankIdx), insideBoard: true };
+    },
+    [boardOrientation]
+  );
+
+  // Global pointermove / pointerup listeners for Board Editor drag-and-drop
+  useEffect(() => {
+    if (!pointerDrag) return;
+
+    const handleGlobalPointerMove = (e: PointerEvent) => {
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.clientX - pointerDrag.startX,
+        e.clientY - pointerDrag.startY
+      );
+      setPointerDrag(prev =>
+        prev
+          ? {
+              ...prev,
+              clientX: e.clientX,
+              clientY: e.clientY,
+              hasMoved: prev.hasMoved || dist > 5,
+            }
+          : null
+      );
+    };
+
+    const handleGlobalPointerUp = (e: PointerEvent) => {
+      const { square: targetSquare, insideBoard } = getSquareFromClientCoords(
+        e.clientX,
+        e.clientY
+      );
+
+      if (pointerDrag.source === "palette") {
+        // Dragged from palette onto board square
+        if (insideBoard && targetSquare) {
+          const check = validateEditorAction(
+            editorBoard,
+            pointerDrag.piece,
+            targetSquare,
+            null
+          );
+          if (!check.allowed) {
+            setEditorFeedback(check.reason);
+          } else {
+            const nextBoard: BoardMap = {
+              ...editorBoard,
+              [targetSquare]: {
+                color: pointerDrag.piece[0] as PieceColor,
+                type: pointerDrag.piece[1].toLowerCase() as any,
+                code: pointerDrag.piece,
+              },
+            };
+            applyEditorState(nextBoard, editorTurn);
+          }
+        }
+      } else if (pointerDrag.source === "board" && pointerDrag.sourceSquare) {
+        if (!insideBoard && pointerDrag.hasMoved) {
+          // Dragged board piece outside the chessboard boundary -> auto-delete
+          const nextBoard: BoardMap = { ...editorBoard };
+          delete nextBoard[pointerDrag.sourceSquare];
+          applyEditorState(nextBoard, editorTurn);
+        } else if (
+          insideBoard &&
+          targetSquare &&
+          targetSquare !== pointerDrag.sourceSquare
+        ) {
+          // Moved board piece to another square
+          const check = validateEditorAction(
+            editorBoard,
+            pointerDrag.piece,
+            targetSquare,
+            pointerDrag.sourceSquare
+          );
+          if (!check.allowed) {
+            setEditorFeedback(check.reason);
+          } else {
+            const nextBoard: BoardMap = { ...editorBoard };
+            delete nextBoard[pointerDrag.sourceSquare];
+            nextBoard[targetSquare] = {
+              color: pointerDrag.piece[0] as PieceColor,
+              type: pointerDrag.piece[1].toLowerCase() as any,
+              code: pointerDrag.piece,
+            };
+            applyEditorState(nextBoard, editorTurn);
+          }
+        } else if (
+          !pointerDrag.hasMoved &&
+          activeEditorTool !== "w-hand" &&
+          activeEditorTool !== "b-hand" &&
+          activeEditorTool !== "w-trash" &&
+          activeEditorTool !== "b-trash"
+        ) {
+          // Clicked on an occupied square while a Piece tool is selected -> replace with selected piece
+          const pieceCode = activeEditorTool as PieceCode;
+          const check = validateEditorAction(
+            editorBoard,
+            pieceCode,
+            pointerDrag.sourceSquare,
+            null
+          );
+          if (!check.allowed) {
+            setEditorFeedback(check.reason);
+          } else {
+            const nextBoard: BoardMap = {
+              ...editorBoard,
+              [pointerDrag.sourceSquare]: {
+                color: pieceCode[0] as PieceColor,
+                type: pieceCode[1].toLowerCase() as any,
+                code: pieceCode,
+              },
+            };
+            applyEditorState(nextBoard, editorTurn);
+          }
+        }
+      }
+
+      setPointerDrag(null);
+    };
+
+    window.addEventListener("pointermove", handleGlobalPointerMove, {
+      passive: false,
+    });
+    window.addEventListener("pointerup", handleGlobalPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", handleGlobalPointerMove);
+      window.removeEventListener("pointerup", handleGlobalPointerUp);
+    };
+  }, [
+    pointerDrag,
+    getSquareFromClientCoords,
+    editorBoard,
+    editorTurn,
+    activeEditorTool,
+    applyEditorState,
+  ]);
+
+  const handlePalettePiecePointerDown = useCallback(
+    (e: React.PointerEvent, piece: PieceCode) => {
+      e.preventDefault();
+      setActiveEditorTool(piece);
+      setPointerDrag({
+        source: "palette",
+        sourceSquare: null,
+        piece,
+        startX: e.clientX,
+        startY: e.clientY,
+        clientX: e.clientX,
+        clientY: e.clientY,
+        hasMoved: false,
+      });
+    },
+    []
+  );
+
+  const handleBoardEditorPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const { square, insideBoard } = getSquareFromClientCoords(
+        e.clientX,
+        e.clientY
+      );
+      if (!insideBoard || !square) return;
+
+      const existingPiece = editorBoard[square];
+
+      // 1. Trash tool: click to remove piece immediately
+      if (activeEditorTool === "w-trash" || activeEditorTool === "b-trash") {
+        if (existingPiece) {
+          const nextBoard: BoardMap = { ...editorBoard };
+          delete nextBoard[square];
+          applyEditorState(nextBoard, editorTurn);
+        }
+        return;
+      }
+
+      // 2. Hand tool: pick up existing piece to move or drag outside to delete
+      if (activeEditorTool === "w-hand" || activeEditorTool === "b-hand") {
+        if (existingPiece) {
+          setPointerDrag({
+            source: "board",
+            sourceSquare: square,
+            piece: existingPiece.code,
+            startX: e.clientX,
+            startY: e.clientY,
+            clientX: e.clientX,
+            clientY: e.clientY,
+            hasMoved: false,
+          });
+        }
+        return;
+      }
+
+      // 3. Piece tool (wK..wP, bK..bP):
+      // If square already has a piece, allow dragging it off-board OR clicking to place activeEditorTool
+      if (existingPiece) {
+        setPointerDrag({
+          source: "board",
+          sourceSquare: square,
+          piece: existingPiece.code,
+          startX: e.clientX,
+          startY: e.clientY,
+          clientX: e.clientX,
+          clientY: e.clientY,
+          hasMoved: false,
+        });
+        return;
+      }
+
+      // Empty square with Piece tool active -> immediate click-to-place
+      const pieceCode = activeEditorTool as PieceCode;
+      const check = validateEditorAction(editorBoard, pieceCode, square, null);
+      if (!check.allowed) {
+        setEditorFeedback(check.reason);
+      } else {
+        const nextBoard: BoardMap = {
+          ...editorBoard,
+          [square]: {
+            color: pieceCode[0] as PieceColor,
+            type: pieceCode[1].toLowerCase() as any,
+            code: pieceCode,
+          },
+        };
+        applyEditorState(nextBoard, editorTurn);
+      }
+    },
+    [
+      getSquareFromClientCoords,
+      editorBoard,
+      activeEditorTool,
+      editorTurn,
+      applyEditorState,
+    ]
+  );
+
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
   const settingsPopupRef = useRef<HTMLDivElement>(null);
   const [popupPos, setPopupPos] = useState<{ left: number; bottom: number }>({ left: 600, bottom: 12 });
-  const [activeEditorTool, setActiveEditorTool] = useState<string>("w-hand");
-  const [editorTurn, setEditorTurn] = useState<"w" | "b">("w");
-  const [editorCastling, setEditorCastling] = useState<{ wK: boolean; wQ: boolean; bK: boolean; bQ: boolean }>({
-    wK: true,
-    wQ: true,
-    bK: true,
-    bQ: true,
-  });
-  const [editorEnPassant, setEditorEnPassant] = useState<string>("-");
-  const [timeControlEnabled, setTimeControlEnabled] = useState<boolean>(false);
-  const [selectedTimePreset, setSelectedTimePreset] = useState<string>("10 min");
 
   const updatePopupPos = useCallback(() => {
     if (settingsBtnRef.current) {
       const rect = settingsBtnRef.current.getBoundingClientRect();
-      const left = Math.min(rect.right + 12, window.innerWidth - 344);
+      const left = Math.min(rect.right + 12, window.innerWidth - 462);
       const bottom = Math.max(window.innerHeight - rect.bottom, 12);
       setPopupPos({ left, bottom });
     }
@@ -295,7 +701,8 @@ const ChessDashboard = forwardRef(function ChessDashboard(
       const target = e.target as Node;
       if (
         settingsPopupRef.current && !settingsPopupRef.current.contains(target) &&
-        settingsBtnRef.current && !settingsBtnRef.current.contains(target)
+        settingsBtnRef.current && !settingsBtnRef.current.contains(target) &&
+        (!boardSquareWrapperRef.current || !boardSquareWrapperRef.current.contains(target))
       ) {
         setShowSettings(false);
       }
@@ -408,7 +815,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
 
         {/* Chess Board — fills remaining height, always square */}
         <div ref={boardContainerRef} className="flex-1 min-h-0 flex items-center justify-center relative">
-          <div style={{ width: boardWidth, height: boardWidth, position: 'relative', flexShrink: 0 }}>
+          <div ref={boardSquareWrapperRef} style={{ width: boardWidth, height: boardWidth, position: 'relative', flexShrink: 0 }}>
             <Chessboard
               options={{
                 position: fen,
@@ -423,11 +830,44 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                 }
               }}
             />
+            {showSettings && (
+              <div
+                onPointerDown={handleBoardEditorPointerDown}
+                className={`absolute inset-0 z-20 touch-none select-none ${
+                  activeEditorTool === "w-trash" || activeEditorTool === "b-trash"
+                    ? "cursor-pointer"
+                    : activeEditorTool === "w-hand" || activeEditorTool === "b-hand"
+                    ? "cursor-grab active:cursor-grabbing"
+                    : "cursor-crosshair"
+                }`}
+              />
+            )}
+            {(!positionValidation.isValid || editorFeedback) && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-30 max-w-[94%] px-3 py-1.5 rounded-lg bg-red-950/95 border border-red-500/60 text-red-200 text-xs font-semibold shadow-lg pointer-events-none whitespace-nowrap overflow-hidden text-ellipsis">
+                ⚠️ {editorFeedback || positionValidation.reason}
+              </div>
+            )}
             {/* Eval Bar */}
             <div className="absolute -right-5 top-0 bottom-0 w-3 bg-[#2a2a2a] rounded overflow-hidden flex flex-col justify-end">
               <div className="w-full bg-gray-100 transition-all duration-500" style={{ height: '50%' }} />
             </div>
           </div>
+          {pointerDrag && pointerDrag.hasMoved && (
+            <div
+              style={{
+                left: `${pointerDrag.clientX}px`,
+                top: `${pointerDrag.clientY}px`,
+              }}
+              className="fixed z-[100] -translate-x-1/2 -translate-y-1/2 pointer-events-none select-none"
+            >
+              <img
+                src={`/pieces/cburnett/${pointerDrag.piece}.svg`}
+                alt={pointerDrag.piece}
+                className="w-11 h-11 object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.75)]"
+                draggable={false}
+              />
+            </div>
+          )}
         </div>
 
         {/* White Player Header */}
@@ -488,20 +928,33 @@ const ChessDashboard = forwardRef(function ChessDashboard(
             <SkipForward size={22} strokeWidth={2} />
           </button>
           <button
-            onClick={() => setIsPracticing(p => !p)}
-            className={`w-[42px] h-[42px] flex items-center justify-center rounded-lg border transition shrink-0 ${
+            onClick={() => {
+              if (!positionValidation.isValid) return;
+              setIsPracticing(p => !p);
+            }}
+            disabled={!positionValidation.isValid}
+            className={`w-[42px] h-[42px] flex items-center justify-center rounded-lg border transition shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
               isPracticing
                 ? "text-primary bg-primary/20 border-primary/50 shadow-[0_0_10px_rgba(129,182,76,0.2)]"
                 : "bg-surface/60 border-surface-border/60 text-gray-300 hover:text-white hover:bg-surface hover:border-surface-border"
             }`}
-            title="Practice with computer"
+            title={
+              positionValidation.isValid
+                ? "Practice with computer"
+                : positionValidation.reason || "Invalid board position"
+            }
           >
             <Target size={22} strokeWidth={2} />
           </button>
           <button
             onClick={handleStartAnalysis}
-            disabled={isAnalyzingLocal}
-            className="h-[42px] px-3.5 flex items-center justify-center gap-2 bg-primary/20 text-primary border border-primary/40 hover:bg-primary hover:text-[#111] rounded-lg font-bold text-sm whitespace-nowrap transition-all shadow-[0_0_12px_rgba(129,182,76,0.2)] disabled:opacity-50 shrink-0"
+            disabled={isAnalyzingLocal || !positionValidation.isValid}
+            className="h-[42px] px-3.5 flex items-center justify-center gap-2 bg-primary/20 text-primary border border-primary/40 hover:bg-primary hover:text-[#111] rounded-lg font-bold text-sm whitespace-nowrap transition-all shadow-[0_0_12px_rgba(129,182,76,0.2)] disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            title={
+              positionValidation.isValid
+                ? "Start Analysis"
+                : positionValidation.reason || "Invalid board position"
+            }
           >
             <Brain size={22} strokeWidth={2} className="shrink-0" />
             <span>{isAnalyzingLocal ? "Analyzing..." : "Start Analysis"}</span>
@@ -526,10 +979,17 @@ const ChessDashboard = forwardRef(function ChessDashboard(
               <div
                 ref={settingsPopupRef}
                 style={{ left: `${popupPos.left}px`, bottom: `${popupPos.bottom}px` }}
-                className="fixed w-[330px] max-h-[calc(100vh-24px)] overflow-y-auto bg-[#1e1e1e] text-gray-200 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.85)] z-50 border border-[#2e2e2e] p-3 flex flex-col gap-2.5"
+                className="fixed w-[450px] max-h-[calc(100vh-24px)] overflow-y-auto bg-[#1e1e1e] text-gray-200 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.85)] z-50 border border-[#2e2e2e] p-4 flex flex-col gap-3"
               >
+                {(!positionValidation.isValid || editorFeedback) && (
+                  <div className="px-3 py-2 rounded-xl bg-red-950/70 border border-red-500/40 text-red-200 text-xs font-semibold flex items-center gap-2">
+                    <span className="shrink-0">⚠️</span>
+                    <span className="truncate">{editorFeedback || positionValidation.reason}</span>
+                  </div>
+                )}
+
                 {/* 3.5.5.1 Computer Level */}
-                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-2.5">
+                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <label className="text-[11px] font-bold text-gray-300 tracking-wider uppercase">Computer Level</label>
                     <span className="text-xs font-bold text-primary font-mono bg-primary/15 px-2.5 py-0.5 rounded-md border border-primary/30 whitespace-nowrap">
@@ -556,7 +1016,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                 </div>
 
                 {/* 3.5.5.2 Show Best Move */}
-                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-3 py-2 flex items-center justify-between">
+                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-3.5 py-2.5 flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-200">Show best move</span>
                   <button
                     type="button"
@@ -578,47 +1038,38 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                 {/* 3.5.5.3 Black Pieces Palette */}
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-semibold text-gray-300 px-0.5">Black Pieces Palette</span>
-                  <div className="bg-[#252429] border border-[#35343c] rounded-xl p-1 grid grid-cols-8 gap-1">
+                  <div className="bg-[#1e2327] border border-[#2f373e] rounded-xl p-1.5 grid grid-cols-8 gap-1.5">
                     <button
                       type="button"
                       onPointerDown={e => {
                         e.preventDefault();
                         setActiveEditorTool("b-hand");
                       }}
-                      onPointerMove={e => {
-                        if (e.buttons > 0) e.preventDefault();
-                      }}
-                      className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                      className={`min-w-[42px] h-[44px] rounded-lg flex items-center justify-center transition touch-none select-none ${
                         activeEditorTool === "b-hand"
                           ? "bg-primary/20 border border-primary text-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
-                          : "border border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                          : "border border-transparent text-gray-300 hover:text-white hover:bg-white/10"
                       }`}
                       title="Move / Drag Piece"
                     >
-                      <Hand size={18} strokeWidth={2} />
+                      <Hand size={20} strokeWidth={2} />
                     </button>
                     {(["bK", "bQ", "bR", "bB", "bN", "bP"] as const).map(piece => (
                       <button
                         key={piece}
                         type="button"
-                        onPointerDown={e => {
-                          e.preventDefault();
-                          setActiveEditorTool(piece);
-                        }}
-                        onPointerMove={e => {
-                          if (e.buttons > 0) e.preventDefault();
-                        }}
-                        className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                        onPointerDown={e => handlePalettePiecePointerDown(e, piece)}
+                        className={`min-w-[42px] h-[44px] rounded-lg flex items-center justify-center transition touch-none select-none ${
                           activeEditorTool === piece
                             ? "bg-primary/20 border border-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
-                            : "border border-transparent hover:bg-white/5"
+                            : "border border-transparent hover:bg-white/10"
                         }`}
                         title={piece}
                       >
                         <img
                           src={`/pieces/cburnett/${piece}.svg`}
                           alt={piece}
-                          className="w-6 h-6 object-contain pointer-events-none select-none"
+                          className="w-[30px] h-[30px] object-contain pointer-events-none select-none"
                           draggable={false}
                         />
                       </button>
@@ -629,17 +1080,14 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                         e.preventDefault();
                         setActiveEditorTool("b-trash");
                       }}
-                      onPointerMove={e => {
-                        if (e.buttons > 0) e.preventDefault();
-                      }}
-                      className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                      className={`min-w-[42px] h-[44px] rounded-lg flex items-center justify-center transition touch-none select-none ${
                         activeEditorTool === "b-trash"
                           ? "bg-primary/20 border border-primary text-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
-                          : "border border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                          : "border border-transparent text-gray-300 hover:text-white hover:bg-white/10"
                       }`}
                       title="Delete Piece"
                     >
-                      <Trash2 size={18} strokeWidth={2} />
+                      <Trash2 size={20} strokeWidth={2} />
                     </button>
                   </div>
                 </div>
@@ -647,37 +1095,28 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                 {/* 3.5.5.4 White Pieces Palette */}
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-semibold text-gray-300 px-0.5">White Pieces Palette</span>
-                  <div className="bg-[#252429] border border-[#35343c] rounded-xl p-1 grid grid-cols-8 gap-1">
+                  <div className="bg-[#252429] border border-[#35343c] rounded-xl p-1.5 grid grid-cols-8 gap-1.5">
                     <button
                       type="button"
                       onPointerDown={e => {
                         e.preventDefault();
                         setActiveEditorTool("w-hand");
                       }}
-                      onPointerMove={e => {
-                        if (e.buttons > 0) e.preventDefault();
-                      }}
-                      className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                      className={`min-w-[42px] h-[44px] rounded-lg flex items-center justify-center transition touch-none select-none ${
                         activeEditorTool === "w-hand"
                           ? "bg-primary/20 border border-primary text-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
                           : "border border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/5"
                       }`}
                       title="Move / Drag Piece"
                     >
-                      <Hand size={18} strokeWidth={2} />
+                      <Hand size={20} strokeWidth={2} />
                     </button>
                     {(["wK", "wQ", "wR", "wB", "wN", "wP"] as const).map(piece => (
                       <button
                         key={piece}
                         type="button"
-                        onPointerDown={e => {
-                          e.preventDefault();
-                          setActiveEditorTool(piece);
-                        }}
-                        onPointerMove={e => {
-                          if (e.buttons > 0) e.preventDefault();
-                        }}
-                        className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                        onPointerDown={e => handlePalettePiecePointerDown(e, piece)}
+                        className={`min-w-[42px] h-[44px] rounded-lg flex items-center justify-center transition touch-none select-none ${
                           activeEditorTool === piece
                             ? "bg-primary/20 border border-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
                             : "border border-transparent hover:bg-white/5"
@@ -687,7 +1126,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                         <img
                           src={`/pieces/cburnett/${piece}.svg`}
                           alt={piece}
-                          className="w-6 h-6 object-contain pointer-events-none select-none"
+                          className="w-[30px] h-[30px] object-contain pointer-events-none select-none"
                           draggable={false}
                         />
                       </button>
@@ -698,29 +1137,34 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                         e.preventDefault();
                         setActiveEditorTool("w-trash");
                       }}
-                      onPointerMove={e => {
-                        if (e.buttons > 0) e.preventDefault();
-                      }}
-                      className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                      className={`min-w-[42px] h-[44px] rounded-lg flex items-center justify-center transition touch-none select-none ${
                         activeEditorTool === "w-trash"
                           ? "bg-primary/20 border border-primary text-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
                           : "border border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/5"
                       }`}
                       title="Delete Piece"
                     >
-                      <Trash2 size={18} strokeWidth={2} />
+                      <Trash2 size={20} strokeWidth={2} />
                     </button>
                   </div>
                 </div>
 
                 {/* 3.5.5.5 Turn to Play, 3.5.5.6 Castling Rights, 3.5.5.7 En Passant Rights */}
-                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-2.5 flex flex-col gap-2">
+                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-3 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-gray-200">Turn to play</span>
                     <select
                       value={editorTurn}
-                      onChange={e => setEditorTurn(e.target.value as "w" | "b")}
-                      className="bg-[#242424] border border-[#3a3a3a] text-gray-200 text-xs font-medium rounded-lg px-2.5 py-1 focus:outline-none focus:border-primary cursor-pointer"
+                      onChange={e => {
+                        const nextTurn = e.target.value as PieceColor;
+                        const turnCheck = canSwitchTurn(editorBoard, nextTurn);
+                        if (!turnCheck.allowed) {
+                          setEditorFeedback(turnCheck.reason);
+                          return;
+                        }
+                        applyEditorState(editorBoard, nextTurn);
+                      }}
+                      className="h-[38px] bg-[#242424] border border-[#3a3a3a] text-gray-200 text-xs font-medium rounded-lg px-3 focus:outline-none focus:border-primary cursor-pointer"
                     >
                       <option value="w">White to play</option>
                       <option value="b">Black to play</option>
@@ -729,47 +1173,95 @@ const ChessDashboard = forwardRef(function ChessDashboard(
 
                   <div className="border-t border-[#262626]" />
 
-                  <div className="flex flex-col gap-1.5">
+                  <div className="flex flex-col gap-2">
                     <span className="text-xs font-bold text-gray-200">Castling rights</span>
                     <div className="flex items-center justify-between text-xs text-gray-300">
-                      <span className="w-12 text-gray-400">White</span>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <span className="w-14 text-gray-400">White</span>
+                      <label
+                        className={`flex items-center gap-2 select-none ${
+                          eligibleCastling.wK
+                            ? "cursor-pointer text-gray-200"
+                            : "opacity-40 cursor-not-allowed text-gray-500"
+                        }`}
+                      >
                         <span>0-0</span>
                         <input
                           type="checkbox"
-                          checked={editorCastling.wK}
-                          onChange={e => setEditorCastling(c => ({ ...c, wK: e.target.checked }))}
-                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                          disabled={!eligibleCastling.wK}
+                          checked={editorCastling.wK && eligibleCastling.wK}
+                          onChange={e =>
+                            applyEditorState(editorBoard, editorTurn, {
+                              ...editorCastling,
+                              wK: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4 accent-primary rounded cursor-pointer disabled:cursor-not-allowed"
                         />
                       </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <label
+                        className={`flex items-center gap-2 select-none ${
+                          eligibleCastling.wQ
+                            ? "cursor-pointer text-gray-200"
+                            : "opacity-40 cursor-not-allowed text-gray-500"
+                        }`}
+                      >
                         <span>0-0-0</span>
                         <input
                           type="checkbox"
-                          checked={editorCastling.wQ}
-                          onChange={e => setEditorCastling(c => ({ ...c, wQ: e.target.checked }))}
-                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                          disabled={!eligibleCastling.wQ}
+                          checked={editorCastling.wQ && eligibleCastling.wQ}
+                          onChange={e =>
+                            applyEditorState(editorBoard, editorTurn, {
+                              ...editorCastling,
+                              wQ: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4 accent-primary rounded cursor-pointer disabled:cursor-not-allowed"
                         />
                       </label>
                     </div>
                     <div className="flex items-center justify-between text-xs text-gray-300">
-                      <span className="w-12 text-gray-400">Black</span>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <span className="w-14 text-gray-400">Black</span>
+                      <label
+                        className={`flex items-center gap-2 select-none ${
+                          eligibleCastling.bK
+                            ? "cursor-pointer text-gray-200"
+                            : "opacity-40 cursor-not-allowed text-gray-500"
+                        }`}
+                      >
                         <span>0-0</span>
                         <input
                           type="checkbox"
-                          checked={editorCastling.bK}
-                          onChange={e => setEditorCastling(c => ({ ...c, bK: e.target.checked }))}
-                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                          disabled={!eligibleCastling.bK}
+                          checked={editorCastling.bK && eligibleCastling.bK}
+                          onChange={e =>
+                            applyEditorState(editorBoard, editorTurn, {
+                              ...editorCastling,
+                              bK: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4 accent-primary rounded cursor-pointer disabled:cursor-not-allowed"
                         />
                       </label>
-                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                      <label
+                        className={`flex items-center gap-2 select-none ${
+                          eligibleCastling.bQ
+                            ? "cursor-pointer text-gray-200"
+                            : "opacity-40 cursor-not-allowed text-gray-500"
+                        }`}
+                      >
                         <span>0-0-0</span>
                         <input
                           type="checkbox"
-                          checked={editorCastling.bQ}
-                          onChange={e => setEditorCastling(c => ({ ...c, bQ: e.target.checked }))}
-                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                          disabled={!eligibleCastling.bQ}
+                          checked={editorCastling.bQ && eligibleCastling.bQ}
+                          onChange={e =>
+                            applyEditorState(editorBoard, editorTurn, {
+                              ...editorCastling,
+                              bQ: e.target.checked,
+                            })
+                          }
+                          className="w-4 h-4 accent-primary rounded cursor-pointer disabled:cursor-not-allowed"
                         />
                       </label>
                     </div>
@@ -780,19 +1272,34 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-xs font-semibold text-gray-200">En passant rights</span>
                     <select
-                      value={editorEnPassant}
-                      onChange={e => setEditorEnPassant(e.target.value)}
-                      className="bg-[#242424] border border-[#3a3a3a] text-gray-200 text-xs font-medium rounded-lg px-2.5 py-1 min-w-[64px] text-center focus:outline-none focus:border-primary cursor-pointer"
+                      disabled={legalEpFiles.length === 0}
+                      value={legalEpFiles.includes(editorEnPassant) ? editorEnPassant : "-"}
+                      onChange={e =>
+                        applyEditorState(
+                          editorBoard,
+                          editorTurn,
+                          editorCastling,
+                          e.target.value
+                        )
+                      }
+                      className="h-[38px] bg-[#242424] border border-[#3a3a3a] text-gray-200 text-xs font-medium rounded-lg px-3 min-w-[76px] text-center focus:outline-none focus:border-primary cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                      {["-", "a", "b", "c", "d", "e", "f", "g", "h"].map(file => (
-                        <option key={file} value={file}>{file}</option>
+                      <option value="-">-</option>
+                      {["a", "b", "c", "d", "e", "f", "g", "h"].map(file => (
+                        <option
+                          key={file}
+                          value={file}
+                          disabled={!legalEpFiles.includes(file)}
+                        >
+                          {file}
+                        </option>
                       ))}
                     </select>
                   </div>
                 </div>
 
                 {/* 3.5.5.8 Time Control */}
-                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-2.5 flex flex-col gap-2">
+                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-3 flex flex-col gap-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-bold text-gray-300 tracking-wider uppercase">Time Control</span>
                     <button
@@ -811,7 +1318,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                       />
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="grid grid-cols-3 gap-2">
                     {["1 min", "1 + 1", "2 + 1", "3 min", "3 + 2", "5 min", "10 min", "10 + 5", "15 + 10"].map(preset => {
                       const isSelected = selectedTimePreset === preset;
                       return (
@@ -819,7 +1326,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                           key={preset}
                           type="button"
                           onClick={() => setSelectedTimePreset(preset)}
-                          className={`h-7 rounded-lg text-xs border transition flex items-center justify-center ${
+                          className={`h-[40px] rounded-lg text-xs border transition flex items-center justify-center ${
                             isSelected
                               ? "bg-primary/20 border-primary text-primary font-bold shadow-[0_0_8px_rgba(129,182,76,0.2)]"
                               : "bg-[#222222] border-[#333333] text-gray-300 font-medium hover:text-white hover:border-[#444444]"
@@ -837,17 +1344,17 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                   <button
                     type="button"
                     onClick={resetBoard}
-                    className="flex items-center justify-center gap-2 px-2.5 h-9 rounded-xl bg-[#161616] border border-[#2a2a2a] hover:bg-[#222222] hover:border-[#3a3a3a] text-gray-200 hover:text-white text-xs font-semibold transition whitespace-nowrap"
+                    className="flex items-center justify-center gap-2 px-3 h-[40px] rounded-xl bg-[#161616] border border-[#2a2a2a] hover:bg-[#222222] hover:border-[#3a3a3a] text-gray-200 hover:text-white text-xs font-semibold transition whitespace-nowrap"
                   >
-                    <RotateCcw size={15} className="text-gray-300 shrink-0" />
+                    <RotateCcw size={16} className="text-gray-300 shrink-0" />
                     <span>Starting Position</span>
                   </button>
                   <button
                     type="button"
                     onClick={clearBoard}
-                    className="flex items-center justify-center gap-2 px-2.5 h-9 rounded-xl bg-[#161616] border border-[#2a2a2a] hover:bg-[#222222] hover:border-[#3a3a3a] text-gray-200 hover:text-white text-xs font-semibold transition whitespace-nowrap"
+                    className="flex items-center justify-center gap-2 px-3 h-[40px] rounded-xl bg-[#161616] border border-[#2a2a2a] hover:bg-[#222222] hover:border-[#3a3a3a] text-gray-200 hover:text-white text-xs font-semibold transition whitespace-nowrap"
                   >
-                    <Trash2 size={15} className="text-gray-300 shrink-0" />
+                    <Trash2 size={16} className="text-gray-300 shrink-0" />
                     <span>Clear Board</span>
                   </button>
                 </div>
