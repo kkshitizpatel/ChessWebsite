@@ -80,17 +80,23 @@ Use these tags in your prompt to easily control the changes:
 | 3.4.2 | Captured Pieces (Live UI) | ✅ Working | Shows ♟♞♝♜♛ icons of captured pieces |
 | 3.4.3 | Live Material Advantage (+ Score) | ✅ Working | Shows +X based on piece values (P=1, N/B=3, R=5, Q=9) |
 | 3.4.4 | Clock Time | ✅ Working | Displays player clock, parses [%clk] from PGN |
-| 3.5.1 | Playback Buttons | ✅ Working | Start/Back/Forward/End wired |
-| 3.5.2 | Practice with Computer | ✅ Working | Button toggles practice mode against engine |
-| 3.5.3 | Start Analysis Button | ✅ Working | Sends selected moves to AI API |
-| 3.5.4 | Chessboard Settings Button | ✅ Working | Toggles popup |
-| 3.5.4 (Redesign) | Chessboard Settings Popup Redesign | ✅ Working | Authorized under #change #visual |
-| 3.5.4.1 | Computer Level Slider | ✅ Working | Updates Engine Skill (1-10) (engine = stockfish-18-lite-single (final)) |
-| 3.5.4.2 | Show best move (toggle) | ⬜ Not Started | Engine top move display toggle |
-| 3.5.4.3 | Flip Board Option | ✅ Working | Toggles orientation |
-| 3.5.4.4 | Starting Position Option | ✅ Working | Resets board |
-| 3.5.4.5 | Clear Board Option | ✅ Working | Empties board |
-| 3.6.5 | Board Editor Option | ⬜ Deferred | 3.5.4 se hataya gaya, naya location baad me decide hoga |
+| 3.5 | Bottom Control Bar | ✅ Working | Unified bottom control dock |
+| 3.5.1 | Flip board | ✅ Working | Toggles board orientation |
+| 3.5.2 | Playback Buttons (Start, Back, Forward, End) | ✅ Working | Start/Back/Forward/End wired |
+| 3.5.3 | Practice with Computer (Target Icon) | ✅ Working | Button toggles practice mode against engine |
+| 3.5.4 | Start Analysis Button (Green Button) | ✅ Working | Sends selected moves to AI API |
+| 3.5.5 | Chessboard Settings (Slider Icon) | ✅ Working | Toggles settings popup |
+| 3.5.5 (Redesign) | 3.5.5 Popup Redesign | ✅ Working | Board Editor + Settings unified popup UI complete |
+| 3.5.5.1 | Computer level (Slider + Badge, default 6) | ✅ Working | Updates Engine Skill (1-10) (engine = stockfish-19-lite-single) |
+| 3.5.5.2 | Show best move (Toggle icon) | ✅ Working | Engine top move display toggle |
+| 3.5.5.3 | Black pieces palette | ⬜ UI Only | cburnett SVG palette + Pointer Events skeleton ready; Board Editor logic pending |
+| 3.5.5.4 | White pieces palette | ⬜ UI Only | cburnett SVG palette + Pointer Events skeleton ready; Board Editor logic pending |
+| 3.5.5.5 | Turn to play (Dropdown) | ⬜ UI Only | Dropdown UI ready; FEN turn binding pending |
+| 3.5.5.6 | Castling rights (Checkboxes) | ⬜ UI Only | White/Black 0-0 & 0-0-0 checkboxes UI ready; legality binding pending |
+| 3.5.5.7 | En passant rights (Dropdown) | ⬜ UI Only | '-' and a-h dropdown UI ready; legal file binding pending |
+| 3.5.5.8 | Time control (Toggle icon + presets) | ⬜ UI Only | Toggle & 3x3 preset grid UI ready (10 min default); clock logic pending |
+| 3.5.5.9 | Starting position | ✅ Working | Resets board to standard starting position |
+| 3.5.5.10 | Clear board | ✅ Working | Empties board |
 
 ---
 

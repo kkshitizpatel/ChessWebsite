@@ -6,7 +6,7 @@ import { Chessboard } from "react-chessboard";
 import {
   Target, Brain, SlidersHorizontal, ArrowUpDown,
   Crosshair, PenTool, RotateCcw, Trash2, Edit3,
-  SkipBack, ArrowLeft, ArrowRight, SkipForward, User
+  SkipBack, ArrowLeft, ArrowRight, SkipForward, User, Hand
 } from "lucide-react";
 import { Engine } from "../lib/engine";
 import { MoveTree, createEmptyTree, parsePgnToTree, addMoveToTree, exportTreeToPgn } from "../lib/moveTree";
@@ -266,13 +266,24 @@ const ChessDashboard = forwardRef(function ChessDashboard(
   const [isAnalyzingLocal, setIsAnalyzingLocal] = useState(false);
   const settingsBtnRef = useRef<HTMLButtonElement>(null);
   const settingsPopupRef = useRef<HTMLDivElement>(null);
-  const [popupPos, setPopupPos] = useState<{ left: number; bottom: number }>({ left: 600, bottom: 24 });
+  const [popupPos, setPopupPos] = useState<{ left: number; bottom: number }>({ left: 600, bottom: 12 });
+  const [activeEditorTool, setActiveEditorTool] = useState<string>("w-hand");
+  const [editorTurn, setEditorTurn] = useState<"w" | "b">("w");
+  const [editorCastling, setEditorCastling] = useState<{ wK: boolean; wQ: boolean; bK: boolean; bQ: boolean }>({
+    wK: true,
+    wQ: true,
+    bK: true,
+    bQ: true,
+  });
+  const [editorEnPassant, setEditorEnPassant] = useState<string>("-");
+  const [timeControlEnabled, setTimeControlEnabled] = useState<boolean>(false);
+  const [selectedTimePreset, setSelectedTimePreset] = useState<string>("10 min");
 
   const updatePopupPos = useCallback(() => {
     if (settingsBtnRef.current) {
       const rect = settingsBtnRef.current.getBoundingClientRect();
-      const left = Math.min(rect.right + 12, window.innerWidth - 280);
-      const bottom = Math.max(window.innerHeight - rect.bottom, 16);
+      const left = Math.min(rect.right + 12, window.innerWidth - 344);
+      const bottom = Math.max(window.innerHeight - rect.bottom, 12);
       setPopupPos({ left, bottom });
     }
   }, []);
@@ -440,7 +451,14 @@ const ChessDashboard = forwardRef(function ChessDashboard(
         </div>
 
         {/* Controls Bar */}
-        <div className="mt-3 flex items-center justify-between bg-surface-elevated rounded-xl px-4 py-2 border border-surface-border shrink-0">
+        <div className="mt-3 flex items-center justify-between bg-surface-elevated rounded-xl px-3 py-2 border border-surface-border shrink-0">
+          <button
+            onClick={() => setBoardOrientation(o => (o === "white" ? "black" : "white"))}
+            className="w-[42px] h-[42px] flex items-center justify-center rounded-lg bg-surface/60 border border-surface-border/60 hover:bg-surface hover:border-surface-border text-gray-300 hover:text-white transition shrink-0"
+            title="Flip board"
+          >
+            <ArrowUpDown size={22} strokeWidth={2} />
+          </button>
           <button
             onClick={() => goToMove(null)}
             className="w-[42px] h-[42px] flex items-center justify-center rounded-lg bg-surface/60 border border-surface-border/60 hover:bg-surface hover:border-surface-border text-gray-300 hover:text-white transition shrink-0"
@@ -483,7 +501,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
           <button
             onClick={handleStartAnalysis}
             disabled={isAnalyzingLocal}
-            className="h-[42px] px-5 flex items-center justify-center gap-2.5 bg-primary/20 text-primary border border-primary/40 hover:bg-primary hover:text-[#111] rounded-lg font-bold text-sm transition-all shadow-[0_0_12px_rgba(129,182,76,0.2)] disabled:opacity-50 shrink-0"
+            className="h-[42px] px-3.5 flex items-center justify-center gap-2 bg-primary/20 text-primary border border-primary/40 hover:bg-primary hover:text-[#111] rounded-lg font-bold text-sm whitespace-nowrap transition-all shadow-[0_0_12px_rgba(129,182,76,0.2)] disabled:opacity-50 shrink-0"
           >
             <Brain size={22} strokeWidth={2} className="shrink-0" />
             <span>{isAnalyzingLocal ? "Analyzing..." : "Start Analysis"}</span>
@@ -508,16 +526,17 @@ const ChessDashboard = forwardRef(function ChessDashboard(
               <div
                 ref={settingsPopupRef}
                 style={{ left: `${popupPos.left}px`, bottom: `${popupPos.bottom}px` }}
-                className="fixed w-[264px] bg-surface-elevated text-gray-200 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.75)] z-50 border border-surface-border p-3.5 flex flex-col gap-3"
+                className="fixed w-[330px] max-h-[calc(100vh-24px)] overflow-y-auto bg-[#1e1e1e] text-gray-200 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,0.85)] z-50 border border-[#2e2e2e] p-3 flex flex-col gap-2.5"
               >
-                <div className="bg-surface border border-surface-border rounded-lg p-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">Computer Level</label>
-                    <span className="text-xs font-semibold text-primary font-mono bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                {/* 3.5.5.1 Computer Level */}
+                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-2.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-gray-300 tracking-wider uppercase">Computer Level</label>
+                    <span className="text-xs font-bold text-primary font-mono bg-primary/15 px-2.5 py-0.5 rounded-md border border-primary/30 whitespace-nowrap">
                       Level: {computerLevel}
                     </span>
                   </div>
-                  <div className="flex justify-between px-0.5 mb-1.5 text-[10px] font-mono text-gray-500">
+                  <div className="flex justify-between px-1 mb-1 text-[11px] font-mono text-gray-400">
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
                       <span key={n} className={n === computerLevel ? "text-primary font-bold" : ""}>{n}</span>
                     ))}
@@ -532,11 +551,13 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                       setComputerLevel(lvl);
                       engineRef.current?.setSkillLevel(Math.round((lvl - 1) * 2.2));
                     }}
-                    className="w-full accent-primary cursor-pointer"
+                    className="w-full h-1.5 accent-primary cursor-pointer"
                   />
                 </div>
-                <div className="bg-surface border border-surface-border rounded-lg px-3 py-2.5 flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-200">Show best move</span>
+
+                {/* 3.5.5.2 Show Best Move */}
+                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl px-3 py-2 flex items-center justify-between">
+                  <span className="text-xs font-semibold text-gray-200">Show best move</span>
                   <button
                     type="button"
                     role="switch"
@@ -553,29 +574,280 @@ const ChessDashboard = forwardRef(function ChessDashboard(
                     />
                   </button>
                 </div>
+
+                {/* 3.5.5.3 Black Pieces Palette */}
                 <div className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-gray-300 px-0.5">Black Pieces Palette</span>
+                  <div className="bg-[#252429] border border-[#35343c] rounded-xl p-1 grid grid-cols-8 gap-1">
+                    <button
+                      type="button"
+                      onPointerDown={e => {
+                        e.preventDefault();
+                        setActiveEditorTool("b-hand");
+                      }}
+                      onPointerMove={e => {
+                        if (e.buttons > 0) e.preventDefault();
+                      }}
+                      className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                        activeEditorTool === "b-hand"
+                          ? "bg-primary/20 border border-primary text-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
+                          : "border border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                      }`}
+                      title="Move / Drag Piece"
+                    >
+                      <Hand size={18} strokeWidth={2} />
+                    </button>
+                    {(["bK", "bQ", "bR", "bB", "bN", "bP"] as const).map(piece => (
+                      <button
+                        key={piece}
+                        type="button"
+                        onPointerDown={e => {
+                          e.preventDefault();
+                          setActiveEditorTool(piece);
+                        }}
+                        onPointerMove={e => {
+                          if (e.buttons > 0) e.preventDefault();
+                        }}
+                        className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                          activeEditorTool === piece
+                            ? "bg-primary/20 border border-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
+                            : "border border-transparent hover:bg-white/5"
+                        }`}
+                        title={piece}
+                      >
+                        <img
+                          src={`/pieces/cburnett/${piece}.svg`}
+                          alt={piece}
+                          className="w-6 h-6 object-contain pointer-events-none select-none"
+                          draggable={false}
+                        />
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onPointerDown={e => {
+                        e.preventDefault();
+                        setActiveEditorTool("b-trash");
+                      }}
+                      onPointerMove={e => {
+                        if (e.buttons > 0) e.preventDefault();
+                      }}
+                      className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                        activeEditorTool === "b-trash"
+                          ? "bg-primary/20 border border-primary text-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
+                          : "border border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                      }`}
+                      title="Delete Piece"
+                    >
+                      <Trash2 size={18} strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3.5.5.4 White Pieces Palette */}
+                <div className="flex flex-col gap-1">
+                  <span className="text-[11px] font-semibold text-gray-300 px-0.5">White Pieces Palette</span>
+                  <div className="bg-[#252429] border border-[#35343c] rounded-xl p-1 grid grid-cols-8 gap-1">
+                    <button
+                      type="button"
+                      onPointerDown={e => {
+                        e.preventDefault();
+                        setActiveEditorTool("w-hand");
+                      }}
+                      onPointerMove={e => {
+                        if (e.buttons > 0) e.preventDefault();
+                      }}
+                      className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                        activeEditorTool === "w-hand"
+                          ? "bg-primary/20 border border-primary text-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
+                          : "border border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                      }`}
+                      title="Move / Drag Piece"
+                    >
+                      <Hand size={18} strokeWidth={2} />
+                    </button>
+                    {(["wK", "wQ", "wR", "wB", "wN", "wP"] as const).map(piece => (
+                      <button
+                        key={piece}
+                        type="button"
+                        onPointerDown={e => {
+                          e.preventDefault();
+                          setActiveEditorTool(piece);
+                        }}
+                        onPointerMove={e => {
+                          if (e.buttons > 0) e.preventDefault();
+                        }}
+                        className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                          activeEditorTool === piece
+                            ? "bg-primary/20 border border-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
+                            : "border border-transparent hover:bg-white/5"
+                        }`}
+                        title={piece}
+                      >
+                        <img
+                          src={`/pieces/cburnett/${piece}.svg`}
+                          alt={piece}
+                          className="w-6 h-6 object-contain pointer-events-none select-none"
+                          draggable={false}
+                        />
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onPointerDown={e => {
+                        e.preventDefault();
+                        setActiveEditorTool("w-trash");
+                      }}
+                      onPointerMove={e => {
+                        if (e.buttons > 0) e.preventDefault();
+                      }}
+                      className={`h-8 rounded-lg flex items-center justify-center transition touch-none select-none ${
+                        activeEditorTool === "w-trash"
+                          ? "bg-primary/20 border border-primary text-primary shadow-[0_0_8px_rgba(129,182,76,0.25)]"
+                          : "border border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/5"
+                      }`}
+                      title="Delete Piece"
+                    >
+                      <Trash2 size={18} strokeWidth={2} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3.5.5.5 Turn to Play, 3.5.5.6 Castling Rights, 3.5.5.7 En Passant Rights */}
+                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-2.5 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-gray-200">Turn to play</span>
+                    <select
+                      value={editorTurn}
+                      onChange={e => setEditorTurn(e.target.value as "w" | "b")}
+                      className="bg-[#242424] border border-[#3a3a3a] text-gray-200 text-xs font-medium rounded-lg px-2.5 py-1 focus:outline-none focus:border-primary cursor-pointer"
+                    >
+                      <option value="w">White to play</option>
+                      <option value="b">Black to play</option>
+                    </select>
+                  </div>
+
+                  <div className="border-t border-[#262626]" />
+
+                  <div className="flex flex-col gap-1.5">
+                    <span className="text-xs font-bold text-gray-200">Castling rights</span>
+                    <div className="flex items-center justify-between text-xs text-gray-300">
+                      <span className="w-12 text-gray-400">White</span>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <span>0-0</span>
+                        <input
+                          type="checkbox"
+                          checked={editorCastling.wK}
+                          onChange={e => setEditorCastling(c => ({ ...c, wK: e.target.checked }))}
+                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <span>0-0-0</span>
+                        <input
+                          type="checkbox"
+                          checked={editorCastling.wQ}
+                          onChange={e => setEditorCastling(c => ({ ...c, wQ: e.target.checked }))}
+                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-300">
+                      <span className="w-12 text-gray-400">Black</span>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <span>0-0</span>
+                        <input
+                          type="checkbox"
+                          checked={editorCastling.bK}
+                          onChange={e => setEditorCastling(c => ({ ...c, bK: e.target.checked }))}
+                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer select-none">
+                        <span>0-0-0</span>
+                        <input
+                          type="checkbox"
+                          checked={editorCastling.bQ}
+                          onChange={e => setEditorCastling(c => ({ ...c, bQ: e.target.checked }))}
+                          className="w-4 h-4 accent-primary rounded cursor-pointer"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="border-t border-[#262626]" />
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-gray-200">En passant rights</span>
+                    <select
+                      value={editorEnPassant}
+                      onChange={e => setEditorEnPassant(e.target.value)}
+                      className="bg-[#242424] border border-[#3a3a3a] text-gray-200 text-xs font-medium rounded-lg px-2.5 py-1 min-w-[64px] text-center focus:outline-none focus:border-primary cursor-pointer"
+                    >
+                      {["-", "a", "b", "c", "d", "e", "f", "g", "h"].map(file => (
+                        <option key={file} value={file}>{file}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* 3.5.5.8 Time Control */}
+                <div className="bg-[#161616] border border-[#2a2a2a] rounded-xl p-2.5 flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-gray-300 tracking-wider uppercase">Time Control</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={timeControlEnabled}
+                      onClick={() => setTimeControlEnabled(v => !v)}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                        timeControlEnabled ? "bg-primary" : "bg-[#2a2a2a] border border-surface-border"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform duration-200 ${
+                          timeControlEnabled ? "translate-x-4 bg-[#111]" : "translate-x-0.5 bg-gray-400"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {["1 min", "1 + 1", "2 + 1", "3 min", "3 + 2", "5 min", "10 min", "10 + 5", "15 + 10"].map(preset => {
+                      const isSelected = selectedTimePreset === preset;
+                      return (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() => setSelectedTimePreset(preset)}
+                          className={`h-7 rounded-lg text-xs border transition flex items-center justify-center ${
+                            isSelected
+                              ? "bg-primary/20 border-primary text-primary font-bold shadow-[0_0_8px_rgba(129,182,76,0.2)]"
+                              : "bg-[#222222] border-[#333333] text-gray-300 font-medium hover:text-white hover:border-[#444444]"
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3.5.5.9 Starting Position & 3.5.5.10 Clear Board */}
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    onClick={() => {
-                      setBoardOrientation(o => (o === "white" ? "black" : "white"));
-                      setShowSettings(false);
-                    }}
-                    className="flex items-center gap-3 px-3 h-9 rounded-lg hover:bg-surface text-gray-300 hover:text-white text-sm font-medium w-full text-left transition"
-                  >
-                    <ArrowUpDown size={18} className="text-primary shrink-0" />
-                    <span>Flip Board</span>
-                  </button>
-                  <button
+                    type="button"
                     onClick={resetBoard}
-                    className="flex items-center gap-3 px-3 h-9 rounded-lg hover:bg-surface text-gray-300 hover:text-white text-sm font-medium w-full text-left transition"
+                    className="flex items-center justify-center gap-2 px-2.5 h-9 rounded-xl bg-[#161616] border border-[#2a2a2a] hover:bg-[#222222] hover:border-[#3a3a3a] text-gray-200 hover:text-white text-xs font-semibold transition whitespace-nowrap"
                   >
-                    <RotateCcw size={18} className="text-primary shrink-0" />
+                    <RotateCcw size={15} className="text-gray-300 shrink-0" />
                     <span>Starting Position</span>
                   </button>
                   <button
+                    type="button"
                     onClick={clearBoard}
-                    className="flex items-center gap-3 px-3 h-9 rounded-lg hover:bg-surface text-gray-300 hover:text-white text-sm font-medium w-full text-left transition"
+                    className="flex items-center justify-center gap-2 px-2.5 h-9 rounded-xl bg-[#161616] border border-[#2a2a2a] hover:bg-[#222222] hover:border-[#3a3a3a] text-gray-200 hover:text-white text-xs font-semibold transition whitespace-nowrap"
                   >
-                    <Trash2 size={18} className="text-primary shrink-0" />
+                    <Trash2 size={15} className="text-gray-300 shrink-0" />
                     <span>Clear Board</span>
                   </button>
                 </div>
