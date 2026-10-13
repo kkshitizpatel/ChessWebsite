@@ -84,11 +84,13 @@ Use these tags in your prompt to easily control the changes:
 | 3.5.2 | Practice with Computer | ✅ Working | Button toggles practice mode against engine |
 | 3.5.3 | Start Analysis Button | ✅ Working | Sends selected moves to AI API |
 | 3.5.4 | Chessboard Settings Button | ✅ Working | Toggles popup |
-| 3.6.1 | Computer Level Slider | ✅ Working | Updates Engine Skill (1-10) |
-| 3.6.2 | Flip Board Option | ✅ Working | Toggles orientation |
-| 3.6.3 | Starting Position Option | ✅ Working | Resets board |
-| 3.6.4 | Clear Board Option | ✅ Working | Empties board |
-| 3.6.5 | Board Editor Option | ⬜ UI Only | Needs custom position editor |
+| 3.5.4 (Redesign) | Chessboard Settings Popup Redesign | ✅ Working | Authorized under #change #visual |
+| 3.5.4.1 | Computer Level Slider | ✅ Working | Updates Engine Skill (1-10) (engine = stockfish-18-lite-single (final)) |
+| 3.5.4.2 | Show best move (toggle) | ⬜ Not Started | Engine top move display toggle |
+| 3.5.4.3 | Flip Board Option | ✅ Working | Toggles orientation |
+| 3.5.4.4 | Starting Position Option | ✅ Working | Resets board |
+| 3.5.4.5 | Clear Board Option | ✅ Working | Empties board |
+| 3.6.5 | Board Editor Option | ⬜ Deferred | 3.5.4 se hataya gaya, naya location baad me decide hoga |
 
 ---
 

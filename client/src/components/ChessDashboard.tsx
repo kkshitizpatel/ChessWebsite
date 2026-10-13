@@ -264,6 +264,45 @@ const ChessDashboard = forwardRef(function ChessDashboard(
 
   const [isPracticing, setIsPracticing] = useState(false);
   const [isAnalyzingLocal, setIsAnalyzingLocal] = useState(false);
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
+  const settingsPopupRef = useRef<HTMLDivElement>(null);
+  const [popupPos, setPopupPos] = useState<{ left: number; bottom: number }>({ left: 600, bottom: 24 });
+
+  const updatePopupPos = useCallback(() => {
+    if (settingsBtnRef.current) {
+      const rect = settingsBtnRef.current.getBoundingClientRect();
+      const left = Math.min(rect.right + 12, window.innerWidth - 280);
+      const bottom = Math.max(window.innerHeight - rect.bottom, 16);
+      setPopupPos({ left, bottom });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!showSettings) return;
+    updatePopupPos();
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (
+        settingsPopupRef.current && !settingsPopupRef.current.contains(target) &&
+        settingsBtnRef.current && !settingsBtnRef.current.contains(target)
+      ) {
+        setShowSettings(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setShowSettings(false);
+      }
+    };
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("resize", updatePopupPos);
+    return () => {
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", updatePopupPos);
+    };
+  }, [showSettings, updatePopupPos]);
 
   
   useEffect(() => {
@@ -401,70 +440,147 @@ const ChessDashboard = forwardRef(function ChessDashboard(
         </div>
 
         {/* Controls Bar */}
-        <div className="mt-3 flex items-center justify-between bg-surface-elevated rounded-lg px-2 py-1.5 border border-surface-border shrink-0">
-          <div className="flex items-center gap-1">
-            <button onClick={() => goToMove(null)} className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface text-gray-400 hover:text-white transition" title="Start"><SkipBack size={16}/></button>
-            <button onClick={goToPreviousMove} className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface text-gray-400 hover:text-white transition" title="Back"><ArrowLeft size={16}/></button>
-            <button onClick={goToNextMove} className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface text-gray-400 hover:text-white transition" title="Forward"><ArrowRight size={16}/></button>
-            <button onClick={goToEndMove} className="w-8 h-8 flex items-center justify-center rounded hover:bg-surface text-gray-400 hover:text-white transition" title="End"><SkipForward size={16}/></button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button 
-              onClick={() => setIsPracticing(p => !p)} 
-              className={`w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface transition ${isPracticing ? 'text-primary bg-primary/20' : 'text-gray-400 hover:text-white'}`} 
-              title="Practice with computer">
-              <Target size={16}/>
+        <div className="mt-3 flex items-center justify-between bg-surface-elevated rounded-xl px-4 py-2 border border-surface-border shrink-0">
+          <button
+            onClick={() => goToMove(null)}
+            className="w-[42px] h-[42px] flex items-center justify-center rounded-lg bg-surface/60 border border-surface-border/60 hover:bg-surface hover:border-surface-border text-gray-300 hover:text-white transition shrink-0"
+            title="Start"
+          >
+            <SkipBack size={22} strokeWidth={2} />
+          </button>
+          <button
+            onClick={goToPreviousMove}
+            className="w-[42px] h-[42px] flex items-center justify-center rounded-lg bg-surface/60 border border-surface-border/60 hover:bg-surface hover:border-surface-border text-gray-300 hover:text-white transition shrink-0"
+            title="Back"
+          >
+            <ArrowLeft size={22} strokeWidth={2} />
+          </button>
+          <button
+            onClick={goToNextMove}
+            className="w-[42px] h-[42px] flex items-center justify-center rounded-lg bg-surface/60 border border-surface-border/60 hover:bg-surface hover:border-surface-border text-gray-300 hover:text-white transition shrink-0"
+            title="Forward"
+          >
+            <ArrowRight size={22} strokeWidth={2} />
+          </button>
+          <button
+            onClick={goToEndMove}
+            className="w-[42px] h-[42px] flex items-center justify-center rounded-lg bg-surface/60 border border-surface-border/60 hover:bg-surface hover:border-surface-border text-gray-300 hover:text-white transition shrink-0"
+            title="End"
+          >
+            <SkipForward size={22} strokeWidth={2} />
+          </button>
+          <button
+            onClick={() => setIsPracticing(p => !p)}
+            className={`w-[42px] h-[42px] flex items-center justify-center rounded-lg border transition shrink-0 ${
+              isPracticing
+                ? "text-primary bg-primary/20 border-primary/50 shadow-[0_0_10px_rgba(129,182,76,0.2)]"
+                : "bg-surface/60 border-surface-border/60 text-gray-300 hover:text-white hover:bg-surface hover:border-surface-border"
+            }`}
+            title="Practice with computer"
+          >
+            <Target size={22} strokeWidth={2} />
+          </button>
+          <button
+            onClick={handleStartAnalysis}
+            disabled={isAnalyzingLocal}
+            className="h-[42px] px-5 flex items-center justify-center gap-2.5 bg-primary/20 text-primary border border-primary/40 hover:bg-primary hover:text-[#111] rounded-lg font-bold text-sm transition-all shadow-[0_0_12px_rgba(129,182,76,0.2)] disabled:opacity-50 shrink-0"
+          >
+            <Brain size={22} strokeWidth={2} className="shrink-0" />
+            <span>{isAnalyzingLocal ? "Analyzing..." : "Start Analysis"}</span>
+          </button>
+          <div className="relative flex items-center shrink-0">
+            <button
+              ref={settingsBtnRef}
+              onClick={() => {
+                updatePopupPos();
+                setShowSettings(s => !s);
+              }}
+              className={`w-[42px] h-[42px] rounded-lg border flex items-center justify-center transition shrink-0 ${
+                showSettings
+                  ? "text-primary bg-primary/20 border-primary/50 shadow-[0_0_10px_rgba(129,182,76,0.2)]"
+                  : "bg-surface/60 border-surface-border/60 text-gray-300 hover:text-white hover:bg-surface hover:border-surface-border"
+              }`}
+              title="Board Settings"
+            >
+              <SlidersHorizontal size={22} strokeWidth={2} />
             </button>
-            <button 
-              onClick={handleStartAnalysis}
-              disabled={isAnalyzingLocal}
-              className="flex items-center gap-2 bg-primary/20 text-primary border border-primary/30 hover:bg-primary hover:text-[#111] px-4 py-1.5 rounded-full font-bold text-sm transition-all shadow-[0_0_10px_rgba(150,168,115,0.2)] disabled:opacity-50">
-              <Brain size={16}/> {isAnalyzingLocal ? "Analyzing..." : "Start Analysis"}
-            </button>
-            <div className="relative">
-              <button
-                onClick={() => setShowSettings(s => !s)}
-                className={`w-8 h-8 rounded-full border border-surface-border flex items-center justify-center hover:bg-surface transition ${showSettings ? "text-white bg-surface" : "text-gray-400 hover:text-white"}`}
-                title="Board Settings"
+            {showSettings && (
+              <div
+                ref={settingsPopupRef}
+                style={{ left: `${popupPos.left}px`, bottom: `${popupPos.bottom}px` }}
+                className="fixed w-[264px] bg-surface-elevated text-gray-200 rounded-xl shadow-[0_8px_32px_rgba(0,0,0,0.75)] z-50 border border-surface-border p-3.5 flex flex-col gap-3"
               >
-                <SlidersHorizontal size={14}/>
-              </button>
-              {showSettings && (
-                <div className="absolute bottom-[calc(100%+10px)] right-0 w-[260px] bg-[#f5f5f5] text-gray-800 rounded-lg shadow-2xl z-50 border border-gray-300 overflow-hidden">
-                  <div className="p-3 bg-white border-b border-gray-200">
-                    <label className="text-xs font-bold text-gray-500 block mb-2 text-center tracking-widest uppercase">Computer Level</label>
-                    <div className="flex justify-between px-1 mb-1 text-xs font-semibold text-gray-700">
-                      {[1,2,3,4,5,6,7,8,9,10].map(n => <span key={n}>{n}</span>)}
-                    </div>
-                    <input type="range" min="1" max="10" value={computerLevel}
-                      onChange={e => { const lvl = Number(e.target.value); setComputerLevel(lvl); engineRef.current?.setSkillLevel(Math.round((lvl - 1) * 2.2)); }}
-                      className="w-full accent-primary cursor-pointer" />
-                    <p className="text-center text-xs text-gray-500 mt-1">Level: <strong>{computerLevel}</strong></p>
+                <div className="bg-surface border border-surface-border rounded-lg p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[11px] font-bold text-gray-400 tracking-wider uppercase">Computer Level</label>
+                    <span className="text-xs font-semibold text-primary font-mono bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                      Level: {computerLevel}
+                    </span>
                   </div>
-                  <div className="py-2 px-4 bg-white border-b border-gray-200">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input type="checkbox" checked={showBestMoveArrow} onChange={e => setShowBestMoveArrow(e.target.checked)} className="accent-primary w-4 h-4" />
-                      <span className="text-sm font-semibold">Show best move arrow</span>
-                    </label>
-                      
+                  <div className="flex justify-between px-0.5 mb-1.5 text-[10px] font-mono text-gray-500">
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                      <span key={n} className={n === computerLevel ? "text-primary font-bold" : ""}>{n}</span>
+                    ))}
                   </div>
-                  <div className="py-1">
-                    <button onClick={() => { setBoardOrientation(o => o === "white" ? "black" : "white"); setShowSettings(false); }} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 text-sm w-full text-left transition">
-                      <ArrowUpDown size={15} className="text-gray-500"/> Flip Board
-                    </button>
-                    <button onClick={resetBoard} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 text-sm w-full text-left transition">
-                      <RotateCcw size={15} className="text-gray-500"/> Starting Position
-                    </button>
-                    <button onClick={clearBoard} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 text-sm w-full text-left transition">
-                      <Trash2 size={15} className="text-gray-500"/> Clear Board
-                    </button>
-                    <button onClick={() => alert("Board Editor feature coming soon!")} className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-100 text-sm w-full text-left transition text-primary">
-                      <PenTool size={15} className="text-gray-500"/> Board Editor
-                    </button>
-                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    value={computerLevel}
+                    onChange={e => {
+                      const lvl = Number(e.target.value);
+                      setComputerLevel(lvl);
+                      engineRef.current?.setSkillLevel(Math.round((lvl - 1) * 2.2));
+                    }}
+                    className="w-full accent-primary cursor-pointer"
+                  />
                 </div>
-              )}
-            </div>
+                <div className="bg-surface border border-surface-border rounded-lg px-3 py-2.5 flex items-center justify-between">
+                  <span className="text-sm font-medium text-gray-200">Show best move</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={showBestMoveArrow}
+                    onClick={() => setShowBestMoveArrow(v => !v)}
+                    className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 focus:outline-none ${
+                      showBestMoveArrow ? "bg-primary" : "bg-[#2a2a2a] border border-surface-border"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full transition-transform duration-200 ${
+                        showBestMoveArrow ? "translate-x-4 bg-[#111]" : "translate-x-0.5 bg-gray-400"
+                      }`}
+                    />
+                  </button>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => {
+                      setBoardOrientation(o => (o === "white" ? "black" : "white"));
+                      setShowSettings(false);
+                    }}
+                    className="flex items-center gap-3 px-3 h-9 rounded-lg hover:bg-surface text-gray-300 hover:text-white text-sm font-medium w-full text-left transition"
+                  >
+                    <ArrowUpDown size={18} className="text-primary shrink-0" />
+                    <span>Flip Board</span>
+                  </button>
+                  <button
+                    onClick={resetBoard}
+                    className="flex items-center gap-3 px-3 h-9 rounded-lg hover:bg-surface text-gray-300 hover:text-white text-sm font-medium w-full text-left transition"
+                  >
+                    <RotateCcw size={18} className="text-primary shrink-0" />
+                    <span>Starting Position</span>
+                  </button>
+                  <button
+                    onClick={clearBoard}
+                    className="flex items-center gap-3 px-3 h-9 rounded-lg hover:bg-surface text-gray-300 hover:text-white text-sm font-medium w-full text-left transition"
+                  >
+                    <Trash2 size={18} className="text-primary shrink-0" />
+                    <span>Clear Board</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
