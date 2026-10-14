@@ -86,7 +86,7 @@ Use these tags in your prompt to easily control the changes:
 | 3.5.3 | Practice with Computer (Target Icon) | ✅ Working | Button toggles practice mode against engine |
 | 3.5.4 | Start Analysis Button (Green Button) | ✅ Working | Sends selected moves to AI API |
 | 3.5.5 | Chessboard Settings (Slider Icon) | ✅ Working | Toggles settings popup |
-| 3.5.5 (Redesign) | 3.5.5 Popup Redesign | ✅ Working | Board Editor + Settings unified popup (width 450px, airy padding, height within 768px bounds) |
+| 3.5.5 (Redesign) | 3.5.5 Popup Redesign | ✅ Working | Board Editor + Settings unified popup (width 440-460px / 450px, airy padding, height within 768px bounds) |
 | 3.5.5.1 | Computer level (Slider + Badge, default 6) | ✅ Working | Updates Engine Skill (1-10) (engine = stockfish-19-lite-single) |
 | 3.5.5.2 | Show best move (Toggle icon) | ✅ Working | Engine top move display toggle |
 | 3.5.5.3 | Black pieces palette | ✅ Working | 42x44px dark-contrast (`#1e2327`) frame, 30px cburnett SVGs, Pointer Events click/drag/trash |
@@ -103,22 +103,22 @@ Use these tags in your prompt to easily control the changes:
 ## 4. COLUMN 2: MOVE LIST
 | ID | Feature | Status | Notes |
 |---|---|---|---|
-| 4.1 | Move List Header | ✅ Working | Visuals complete |
-| 4.2 | Move Rows | ✅ Working | Auto-records SAN moves |
-| 4.3 | Move Selection Checkboxes | ✅ Working | Allows multi-select for AI |
-| 4.4 | Move Click | ✅ Working | Navigates history |
-| 4.5 | Move Evaluation UI | ✅ Working | Eval scores and icons matching quality |
-| 4.6 | Accuracy Footer | ✅ Working | |
-| 4.6.1 | Accuracy | ✅ Working | Consistency-weighted average (WinPercent drop based) |
-| 4.6.2 | Brilliant | ✅ Working | Best move + sacrifice + not losing + not forced |
-| 4.6.3 | Great | ✅ Working | Best move + sharp/critical position (2nd best is much worse) |
-| 4.6.4 | Best | ✅ Working | Engine's top move (PV) |
-| 4.6.5 | Excellent | ✅ Working | WinPercent drop 0-2% |
-| 4.6.6 | Good | ✅ Working | WinPercent drop 2-5% |
-| 4.6.7 | Book | ✅ Working | Opening book moves |
-| 4.6.8 | Inaccuracy | ✅ Working | WinPercent drop 5-10% |
-| 4.6.9 | Mistake | ✅ Working | WinPercent drop 10-20% |
-| 4.6.10 | Blunder | ✅ Working | WinPercent drop 20%+ |
+| 4.1 | Move List Header | ✅ Working | Visuals complete + Accuracy report reopen button |
+| 4.2 | Move Rows & Lichess PGN Tree Branching | ✅ Working | Variation tree numbering strictly Dynamic Parent Prefix rule follow karegi: agar branch Main Move N se originate hoti hai, to sub-moves ka format N.1, N.2, N.3... hoga (e.g., Move 2 se = 2.1, 2.2; Move 3 se = 3.1, 3.2; hardcoded '1.1' strictly prohibited hai); nested variations (depth >= 2) me format ParentPrefix.1, ParentPrefix.2... hoga (e.g., 2.1.1, 2.1.2); main moves standard 1, 2, 3... notation follow karenge |
+| 4.3 | Move Selection Checkboxes | ✅ Working | Allows multi-select for AI across main lines and variations |
+| 4.4 | Move History Click Board Jump | ✅ Working | Navigates history across main lines and variations |
+| 4.5 | Move Classification Visuals | ✅ Working | Colored SAN text + circular badges (`!!`, `!`, `★`, `👍`, `✔`, `📖`, `?!`, `?`, `??`) + eval pills |
+| 4.6 | Accuracy Footer / Summary Panel | ✅ Working | Column 2 bottom green-box panel (`h-[340px]`), photo-less player names me Excel-style wrap-text allow (no truncation/ellipsis), enlarged classification counts (15px-16px) wa icons (22px), 'X' close button, 9-row breakdown table |
+| 4.6.1 | Accuracy | ✅ Working | Consistency-weighted average (WinPercent drop based, strictly Principle VI) |
+| 4.6.2 | Brilliant | ✅ Working | Best move + sacrifice + not losing + not forced (strictly Principle VI) |
+| 4.6.3 | Great | ✅ Working | Best move + sharp/critical position (2nd best is much worse, strictly Principle VI) |
+| 4.6.4 | Best | ✅ Working | Engine's top move (PV, strictly Principle VI) |
+| 4.6.5 | Excellent | ✅ Working | WinPercent drop 0-2% (strictly Principle VI) |
+| 4.6.6 | Good | ✅ Working | WinPercent drop 2-5% (strictly Principle VI) |
+| 4.6.7 | Book | ✅ Working | Opening book moves (strictly Principle VI) |
+| 4.6.8 | Inaccuracy | ✅ Working | WinPercent drop 5-10% (strictly Principle VI) |
+| 4.6.9 | Mistake | ✅ Working | WinPercent drop 10-20% (strictly Principle VI) |
+| 4.6.10 | Blunder | ✅ Working | WinPercent drop 20%+ (strictly Principle VI) |
 
 ---
 

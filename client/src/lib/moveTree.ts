@@ -1,6 +1,17 @@
 import { parse } from '@mliebelt/pgn-parser';
 import { Chess } from 'chess.js';
 
+export type MoveQuality =
+  | 'Brilliant'
+  | 'Great'
+  | 'Best'
+  | 'Excellent'
+  | 'Good'
+  | 'Book'
+  | 'Inaccuracy'
+  | 'Mistake'
+  | 'Blunder';
+
 export type MoveNode = {
   id: string;
   san: string;
@@ -11,17 +22,21 @@ export type MoveNode = {
   childrenIds: string[];
   clock?: string;
   eval?: number;
-  quality?: string;
+  evalText?: string;
+  quality?: MoveQuality;
+  accuracy?: number;
+  winDrop?: number;
   isMate?: boolean;
 };
 
 export type MoveTree = {
   nodes: Record<string, MoveNode>;
   rootIds: string[]; // The very first moves of the game (usually just one, but could be multiple if variations start on move 1)
+  initialFen?: string;
 };
 
-export function createEmptyTree(): MoveTree {
-  return { nodes: {}, rootIds: [] };
+export function createEmptyTree(initialFen: string = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'): MoveTree {
+  return { nodes: {}, rootIds: [], initialFen };
 }
 
 // Generate a simple unique ID
@@ -120,6 +135,7 @@ export function parsePgnToTree(pgnStr: string): MoveTree {
     startFen = ast.tags.FEN;
   }
   
+  tree.initialFen = startFen;
   tree.rootIds = walk(ast.moves, null, startFen);
 
   return tree;
@@ -172,7 +188,7 @@ export function addMoveToTree(
   }
 
   return {
-    newTree: { nodes: newNodes, rootIds: newRootIds },
+    newTree: { nodes: newNodes, rootIds: newRootIds, initialFen: tree.initialFen },
     newNodeId: nodeId,
   };
 }

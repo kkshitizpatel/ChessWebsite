@@ -11,7 +11,13 @@ import {
 import { Engine } from "../lib/engine";
 import { MoveTree, createEmptyTree, parsePgnToTree, addMoveToTree, exportTreeToPgn } from "../lib/moveTree";
 import { MoveList } from "./MoveList";
+import { AccuracyReportPanel } from "./AccuracyReportPanel";
 import { BOARD_THEMES } from "./VisualSettingsModal";
+import {
+  AccuracyStatsSummary,
+  analyzeMoveTreeWithStockfish,
+  createEmptyClassificationCounts,
+} from "../lib/moveAnalysisDispatcher";
 import {
   BoardMap,
   CastlingFlags,
@@ -62,6 +68,8 @@ const ChessDashboard = forwardRef(function ChessDashboard(
   const [moveTree, setMoveTree] = useState<MoveTree>(createEmptyTree());
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null);
   const [selectedMoves, setSelectedMoves] = useState<Set<string>>(new Set());
+  const [accuracySummary, setAccuracySummary] = useState<AccuracyStatsSummary | null>(null);
+  const [showAccuracyPanel, setShowAccuracyPanel] = useState<boolean>(false);
 
   const moveTreeRef = useRef(moveTree);
   const currentNodeIdRef = useRef(currentNodeId);
@@ -134,8 +142,14 @@ const ChessDashboard = forwardRef(function ChessDashboard(
   }, [fen]);
 
   const goToMove = useCallback((nodeId: string | null) => {
-    if (!nodeId) { chessRef.current.reset(); }
-    else {
+    if (!nodeId) {
+      const startFen = moveTreeRef.current.initialFen || STANDARD_INITIAL_FEN;
+      try {
+        chessRef.current.load(startFen);
+      } catch {
+        chessRef.current.reset();
+      }
+    } else {
       const node = moveTreeRef.current.nodes[nodeId];
       if (node) chessRef.current.load(node.fen);
     }
@@ -151,7 +165,10 @@ const ChessDashboard = forwardRef(function ChessDashboard(
     try {
       setImportError("");
       const tree = parsePgnToTree(pgnString);
+      moveTreeRef.current = tree;
       setMoveTree(tree);
+      setAccuracySummary(null);
+      setShowAccuracyPanel(false);
       let lastNodeId: string | null = null;
       if (tree.rootIds.length > 0) {
         let curr = tree.rootIds[0];
@@ -296,9 +313,13 @@ const ChessDashboard = forwardRef(function ChessDashboard(
       setFen(nextFen);
 
       // Reset Move List to fresh custom position setup
-      setMoveTree(createEmptyTree());
+      const emptyTree = createEmptyTree(nextFen);
+      moveTreeRef.current = emptyTree;
+      setMoveTree(emptyTree);
       setCurrentNodeId(null);
       setSelectedMoves(new Set());
+      setAccuracySummary(null);
+      setShowAccuracyPanel(false);
 
       const posCheck = validateBoardPosition(nextBoard, nextTurn);
       if (posCheck.isValid) {
@@ -328,9 +349,13 @@ const ChessDashboard = forwardRef(function ChessDashboard(
     setEditorEnPassant("-");
     setEditorFeedback(null);
     setFen(EMPTY_BOARD_FEN);
-    setMoveTree(createEmptyTree());
+    const emptyTree = createEmptyTree(EMPTY_BOARD_FEN);
+    moveTreeRef.current = emptyTree;
+    setMoveTree(emptyTree);
     setCurrentNodeId(null);
     setSelectedMoves(new Set());
+    setAccuracySummary(null);
+    setShowAccuracyPanel(false);
     setIsPracticing(false);
     setGameStatus("invalid");
     setWhitePlayer({ name: "White Player", rating: "1500" });
@@ -348,9 +373,13 @@ const ChessDashboard = forwardRef(function ChessDashboard(
     setEditorEnPassant("-");
     setEditorFeedback(null);
     setFen(STANDARD_INITIAL_FEN);
-    setMoveTree(createEmptyTree());
+    const emptyTree = createEmptyTree(STANDARD_INITIAL_FEN);
+    moveTreeRef.current = emptyTree;
+    setMoveTree(emptyTree);
     setCurrentNodeId(null);
     setSelectedMoves(new Set());
+    setAccuracySummary(null);
+    setShowAccuracyPanel(false);
     setGameStatus("active");
     setWhitePlayer({ name: "White Player", rating: "1500" });
     setBlackPlayer({ name: "Black Player", rating: "1500" });
@@ -728,6 +757,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
     const currentTurn = chessRef.current.turn() === 'w' ? 'white' : 'black';
     if (currentTurn !== boardOrientation) {
       const timer = setTimeout(async () => {
+        if (!engineRef.current) return;
         const evalResult = await engineRef.current.evaluateFen(fen, computerLevel * 2); 
         const bestMove = evalResult.pv?.split(' ')[0];
         if (bestMove) {
@@ -743,19 +773,45 @@ const ChessDashboard = forwardRef(function ChessDashboard(
 
   const handleStartAnalysis = async () => {
     setIsAnalyzingLocal(true);
-    setAiResponse("Evaluating position with Stockfish 18...");
+    setAiResponse("Evaluating game & position with Stockfish...");
     
     try {
-      // 1. First get Stockfish evaluation
       let engineInfo = "";
       if (engineRef.current) {
-        const evalResult = await engineRef.current.evaluateFen(fen, 14);
+        // 1. Batch-evaluate all recorded moves in MoveTree (4.5 Move Classification Visuals & 4.6 Accuracy Summary)
+        const totalNodes = Object.keys(moveTreeRef.current.nodes).length;
+        if (totalNodes > 0) {
+          const { analyzedTree, summary } = await analyzeMoveTreeWithStockfish(
+            moveTreeRef.current,
+            moveTreeRef.current.initialFen || STANDARD_INITIAL_FEN,
+            engineRef.current,
+            (done, total) => {
+              setAiResponse(`Analyzing game moves with Stockfish (${done}/${total})...`);
+            }
+          );
+          moveTreeRef.current = analyzedTree;
+          setMoveTree(analyzedTree);
+          setAccuracySummary(summary);
+          setShowAccuracyPanel(true);
+        } else {
+          const emptySummary: AccuracyStatsSummary = {
+            whiteAccuracy: 100.0,
+            blackAccuracy: 100.0,
+            whiteCounts: createEmptyClassificationCounts(),
+            blackCounts: createEmptyClassificationCounts(),
+          };
+          setAccuracySummary(emptySummary);
+          setShowAccuracyPanel(true);
+        }
+
+        // 2. Evaluate the active board FEN for AI context
+        const evalResult = await engineRef.current.evaluateFen(fen, 12);
         const scoreStr = evalResult.isMate ? `Mate in ${Math.abs(evalResult.score)}` : `${(evalResult.score / 100).toFixed(2)}`;
         engineInfo = `Stockfish Eval: ${scoreStr} | Best Move: ${evalResult.pv ? evalResult.pv.split(' ')[0] : 'N/A'}`;
         setAiResponse(engineInfo + "\n\nGenerating AI explanation...");
       }
 
-      // 2. Fetch AI Explanation
+      // 3. Fetch AI Explanation
       const selectedArr = Array.from(selectedMoves);
       const moveSubset = selectedArr.length > 0 ? selectedArr.join(", ") : "Current Position";
       
@@ -767,7 +823,7 @@ const ChessDashboard = forwardRef(function ChessDashboard(
           selectedMoves: moveSubset,
           language: explanationLanguage,
           model: aiModel,
-          engineInfo // Pass engine info to AI if the backend supports it, or just use it here
+          engineInfo
         })
       });
       
@@ -1365,16 +1421,27 @@ const ChessDashboard = forwardRef(function ChessDashboard(
 
       </div>
 
-      {/* ===== COLUMN 2: MOVE LIST ===== */}
-      <div className="hidden lg:flex w-[300px] xl:w-[330px] flex-col border-x border-surface-border bg-surface shrink-0">
+      {/* ===== COLUMN 2: MOVE LIST & 4.6 ACCURACY SUMMARY PANEL ===== */}
+      <div className="hidden lg:flex w-[300px] xl:w-[330px] h-full flex-col border-x border-surface-border bg-surface shrink-0 overflow-hidden">
         <div className="bg-surface-elevated text-xs font-bold text-gray-400 uppercase tracking-wider px-3 py-2 border-b border-surface-border shrink-0 flex justify-between items-center">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <span>Move List</span>
-            
           </div>
-          <button onClick={() => goToMove(null)} className="hover:text-white"><SkipBack size={14}/></button>
+          <div className="flex items-center gap-2">
+            {accuracySummary && !showAccuracyPanel && (
+              <button
+                type="button"
+                onClick={() => setShowAccuracyPanel(true)}
+                className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary hover:text-[#111] transition normal-case tracking-normal"
+                title="Show Accuracy Summary Panel"
+              >
+                Accuracy
+              </button>
+            )}
+            <button onClick={() => goToMove(null)} className="hover:text-white" title="Go to start"><SkipBack size={14}/></button>
+          </div>
         </div>
-        <div ref={moveListRef} className="flex-1 overflow-y-auto">
+        <div ref={moveListRef} className="flex-1 min-h-0 overflow-y-auto">
           <MoveList
             tree={moveTree}
             currentNodeId={currentNodeId}
@@ -1385,6 +1452,17 @@ const ChessDashboard = forwardRef(function ChessDashboard(
             usePieceIcons={usePieceIcons}
           />
         </div>
+        {accuracySummary && (
+          <AccuracyReportPanel
+            isOpen={showAccuracyPanel}
+            onClose={() => setShowAccuracyPanel(false)}
+            whiteName={whitePlayer.name}
+            blackName={blackPlayer.name}
+            whiteAccuracy={accuracySummary.whiteAccuracy}
+            blackAccuracy={accuracySummary.blackAccuracy}
+            statsSummary={accuracySummary}
+          />
+        )}
       </div>
 
       {/* ===== COLUMN 3: AI EXPLANATION ===== */}

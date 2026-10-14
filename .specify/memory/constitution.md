@@ -1,15 +1,10 @@
 <!--
 Sync Impact Report:
-- Version change: 1.1.0 → 1.2.0
+- Version change: 1.2.0 → 1.2.1
 - List of modified principles:
-  - I. Fixed Layout: Updated exception note to authorize 3.5 Bottom Control Bar and 3.5.5 Settings popup redesign (width 440-460px, airy padding, height within 768px bounds) under #change #visual #size, locking both upon final approval.
-  - IV. Android-Ready Architecture (#remember): Added rule requiring Pointer Events (pointerdown, pointermove, pointerup) for Board interaction and drag-and-drop so it runs seamlessly on touch screens and mobile WebView.
-  - VIII. Licenses and Dependencies: Updated Stockfish build to "stockfish-19-lite-single" (stockfish-19-lite-single.wasm / .js) (#offline execution, ~1.6MB lite NNUE, zero-server load) with no duplicates in /public/engine/; added Lichess 'cburnett' piece set commercial-OK open license rule (strictly avoiding NonCommercial NC licenses).
-- Added sections:
-  - XI. Chess Legality & Validation (FIDE / Lichess Standard — NON-NEGOTIABLE): Comprehensive custom legality and validation rules for Board Editor (3.5.5).
-  - Governance: Replaced old deferred Board Editor note with integration of Board Editor inside 3.5.5 Chessboard Settings popup (sub-features 3.5.5.3 to 3.5.5.7).
-- Removed sections:
-  - Governance: Removed old "Board Editor deferred" note.
+  - II. Working Features Are Protected: Added strict protection clause confirming Move List variation numbering logic refinements (4.2 Dynamic Parent Prefix) leave board drag-drop (3.2), Stockfish 19 worker, FEN/PGN parser (5.3), and 4.6 Accuracy Panel completely untouched and protected (#no_change).
+- Added sections: None
+- Removed sections: None
 - Follow-up TODOs: None
 -->
 
@@ -27,13 +22,14 @@ Companion file: `Site_Reference.md` is the live status tracker and the home of t
 - The desktop layout is locked to 1366x768 px.
 - No global vertical scroll. Only inner scrolling is allowed (Move List column and AI column).
 - No visual change is allowed unless the prompt carries `#change`, `#visual`, `#size`, `#drag`, `#add` or `#remove`. Default is `#no_change`.
-- Exception Note: 3.5 Bottom Control Bar aur 3.5.5 Settings popup ka redesign (width 440-460px, airy padding, height within 768px bounds) `#change` `#visual` `#size` ke tahat authorized hai. Final approve hone ke baad 3.5 aur 3.5.5 ko `#lock` kiya jayega.
+- Exception Note: 3.5 Bottom Control Bar aur 3.5.5 Settings popup ka redesign (width 440-460px, airy padding, height within 768px bounds) `#change` `#visual` `#size` ke tahat authorized hai. Final approve hone ke baad 3.5 aur 3.5.5 ko `#lock` kiya jayega. Column 2 me Move List aur 4.6 Accuracy Panel ka integration authorized hai, Column 2 ke andar inner-scroll maintain rahega aur global 1366x768 locked layout me koi vertical scroll nahi aayega. Move List variations aur Accuracy panel styling changes sirf Column 2 ke inner container tak seemit rahenge; 1366x768 locked layout me koi global page scroll create nahi hoga.
 
 ### II. Working Features Are Protected (NON-NEGOTIABLE)
 - Any feature marked ✅ Working in `Site_Reference.md` must not be broken by work on another feature.
 - Any feature marked `#lock` is frozen (visual + logic) until the user sends `#unlock`.
 - If a prompt or a code change would touch a protected feature, the agent must STOP, warn, and wait for explicit permission.
 - A change request must touch only the numbered feature IDs named in the prompt.
+- Move List variation numbering logic refinements (4.2 Dynamic Parent Prefix) ke dauran board interaction wa Pointer Events drag-drop (3.2), Stockfish 19 worker (stockfish-19-lite-single), FEN/PGN parser (5.3), aur 4.6 Accuracy Summary Panel (multiline wrap, 15px counts, 22px badges, locked height) completely untouched aur protected rahenge (#no_change).
 
 ### III. Tag-Driven Change Control
 - The Quick Prompt Tags in `Site_Reference.md` are binding instructions.
@@ -59,6 +55,7 @@ Chess math must follow these formulas. Fixed centipawn thresholds are not allowe
 - `Drop = WinPercentBefore - WinPercentAfter`
 - `MoveAccuracy = 103.1668 * e^(-0.04354 * Drop) - 3.1669`, clamped to 0-100.
 - Game accuracy is a consistency-weighted average, not a plain mean.
+- Move classification labels aur accuracy percentages consistency-weighted drop formula par hi calculate honge.
 - Classification by Win% drop: Excellent 0-2%, Good 2-5%, Inaccuracy 5-10%, Mistake 10-20%, Blunder 20%+. Best means the engine's top move (PV).
 - Brilliant: best move + piece sacrifice + position not already losing + not a forced or only move.
 - Great: best move + sharp position where the second-best move is much worse.
@@ -110,4 +107,4 @@ Board Editor (3.5.5) ke dwara board par sirf aur sirf legal chess positions hi s
 - A plan that conflicts with a principle must be revised, or must document an exception the user has approved.
 - Board Editor ko 3.5.5 Chessboard Settings popup ke andar integrate kiya gaya hai (sub-features 3.5.5.3 se 3.5.5.7 ke roop me).
 
-**Version**: 1.2.0 | **Ratified**: 2026-10-12 | **Last Amended**: 13 Oct 2026 (2026-10-13)
+**Version**: 1.2.1 | **Ratified**: 2026-10-12 | **Last Amended**: 13 Oct 2026 (2026-10-13)
